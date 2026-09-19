@@ -1,7 +1,6 @@
 export type HolderType = "deck" | "binder" | "box"
-export type FriendshipStatus = "pending" | "accepted"
 export type TransactionType = "loan" | "sale"
-export type TransactionStatus = "pending" | "active" | "declined" | "completed" | "cancelled"
+export type TransactionStatus = "pending" | "active" | "return_pending" | "declined" | "completed" | "cancelled"
 
 export type Holder = {
   id: number
@@ -56,13 +55,42 @@ export type CollectionItem = {
   created_at: string
   card: CardCatalog
   holder: Holder | null
+  loan_role?: "lender" | "borrower" | null
+  loan_transaction_id?: number | null
+  loan_status?: TransactionStatus | null
+  loan_friend_id?: string | null
+  loan_friend_username?: string | null
+  loan_friend_ids?: string[]
+  lent_quantity?: number
 }
+
+export type FriendRequestNotification = {
+  kind: "friend"
+  id: number
+  from_user_id: string
+  from_username: string | null
+  created_at: string
+}
+
+export type TransactionNotification = {
+  kind: "loan" | "sale" | "return"
+  id: number
+  owner_id: string
+  other_user_id: string
+  other_username: string | null
+  card_name: string
+  quantity: number
+  price_per_card: number | null
+  created_at: string
+}
+
+export type NotificationItem = FriendRequestNotification | TransactionNotification
 
 export type TransactionHistoryItem = {
   id: number
-  transaction_type: "loan" | "sale"
+  transaction_type: TransactionType
   quantity: number
-  status: string
+  status: TransactionStatus
   created_at: string
   completed_at: string | null
   card_name: string

@@ -224,3 +224,60 @@ button:disabled{opacity:.55;cursor:not-allowed}
   .bulkActions{flex-direction:column}
   .bulkActions button{width:100%}
 }
+
+/* ---------- community / notifications / filters ---------- */
+.simpleControls{grid-template-columns:minmax(240px,1fr) auto}
+.filterButton{position:relative}
+.activeFilter{border-color:var(--accent)!important;color:var(--accent)!important}
+.filterCount,.menuCount,.notificationBadge{
+  min-width:19px;height:19px;padding:0 5px;border-radius:999px;
+  display:inline-grid;place-items:center;font-size:11px;font-weight:800
+}
+.filterCount,.menuCount{background:var(--accent);color:#21170e}
+.notificationBadge{position:absolute;right:-6px;top:-7px;background:#cf594d;color:white;border:2px solid var(--bg)}
+.mainDropdown button{position:relative}
+.mainDropdown .menuCount{margin-left:auto}
+
+.filterSection{display:flex;flex-direction:column;gap:9px}
+.colorChecks{display:grid;grid-template-columns:repeat(7,1fr);gap:7px}
+.colorCheck{display:flex!important;align-items:center!important;justify-content:center;gap:5px!important;min-height:38px;padding:0 5px;border:1px solid var(--border);border-radius:8px;background:var(--panel)}
+.colorCheck input{width:auto!important;height:auto!important}
+.colorCheck span{color:var(--text);font-weight:700}
+.modalFooterButtons{display:flex;justify-content:flex-end;gap:8px}
+
+.peopleList,.notificationList{display:flex;flex-direction:column;gap:0}
+.personActionRow,.notificationRow{
+  display:flex;align-items:center;justify-content:space-between;gap:14px;
+  padding:12px 0;border-bottom:1px solid #392c22
+}
+.personActionRow>div:first-child,.notificationRow>div:first-child{display:flex;flex-direction:column;gap:3px;min-width:0}
+.personActionRow small,.notificationRow small{color:var(--muted)}
+.rowActions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.emptyMini{display:flex;flex-direction:column;align-items:center;gap:5px;padding:32px;color:var(--muted)}
+.emptyMini strong{color:var(--text)}
+.nestedModal{z-index:130}
+.contactNotes{min-height:90px}
+
+/* ---------- loan state ---------- */
+.loanBadge{
+  position:absolute;left:7px;top:7px;padding:4px 7px;border-radius:999px;
+  font-size:11px;font-weight:800;box-shadow:0 3px 12px rgba(0,0,0,.35)
+}
+.loanBadge.borrowed{background:#487a9d;color:#fff}
+.loanBadge.lent{background:#7b5b25;color:#fff0c5}
+.borrowedCard{border-color:#426a84}
+.lentCard{border-color:#786139}
+.borrowedSummary,.lockedMove,.movePanel{
+  display:flex;flex-direction:column;gap:7px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--panel)
+}
+.borrowedSummary small,.lockedMove small{color:var(--muted)}
+.moveGrid{display:grid;grid-template-columns:110px 1fr;gap:10px}
+
+@media(max-width:720px){
+  .simpleControls{grid-template-columns:1fr}
+  .personActionRow,.notificationRow{align-items:flex-start;flex-direction:column}
+  .rowActions{width:100%;justify-content:stretch}
+  .rowActions button{flex:1}
+  .colorChecks{grid-template-columns:repeat(4,1fr)}
+  .moveGrid{grid-template-columns:1fr}
+}
