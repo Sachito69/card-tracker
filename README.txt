@@ -1,22 +1,17 @@
-BUILD FIX + REMOVE FROM HOLDER UPDATE
+EMAIL LOGIN RESTORED
 
 Replace:
-- src/components/Tracker.tsx
-- src/components/CardEditorModal.tsx
+- src/components/Auth.tsx
 
-Fixes:
-1. Removes the stale setDeckOptionsId() call that caused:
-   Cannot find name 'setDeckOptionsId'
+Changes:
+- Login is back to normal Supabase Email + Password.
+- Signup still asks for Username + Email + Password.
+- Placeholder hints remain inside the fields:
+  Username / Email / Password.
+- No Supabase Edge Function is needed for login anymore.
+- You can ignore or delete the old username-login Edge Function later.
 
-2. "Remove" behavior:
-   - Card in Deck / Binder / Box:
-     Remove from holder -> moves the full stack to My Collection.
-     It does NOT delete the card from your tracker.
-   - Card already in My Collection:
-     Remove -> deletes it from your tracker as before.
-   - Lent cards remain protected and cannot be removed/moved.
-
-No Supabase changes are needed.
+No SQL migration is needed.
 
 Then run:
 npm run build

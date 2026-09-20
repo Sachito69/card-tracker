@@ -16,8 +16,13 @@ export function Auth() {
 
     const cleanUsername = username.trim()
 
-    if (!USERNAME_RE.test(cleanUsername)) {
+    if (mode === "signup" && !USERNAME_RE.test(cleanUsername)) {
       setMessage("Username must be 3–24 characters using letters, numbers, or _.")
+      return
+    }
+
+    if (!email.trim()) {
+      setMessage("Enter your email.")
       return
     }
 
@@ -26,33 +31,16 @@ export function Auth() {
       return
     }
 
-    if (mode === "signup" && !email.trim()) {
-      setMessage("Enter your email.")
-      return
-    }
-
     setBusy(true)
 
     try {
       if (mode === "login") {
-        const { data, error } = await supabase.functions.invoke("username-login", {
-          body: {
-            username: cleanUsername,
-            password,
-          },
+        const result = await supabase.auth.signInWithPassword({
+          email: email.trim(),
+          password,
         })
 
-        if (error) throw error
-        if (!data?.access_token || !data?.refresh_token) {
-          throw new Error(data?.error || "Invalid username or password.")
-        }
-
-        const { error: sessionError } = await supabase.auth.setSession({
-          access_token: data.access_token,
-          refresh_token: data.refresh_token,
-        })
-
-        if (sessionError) throw sessionError
+        if (result.error) throw result.error
       } else {
         const result = await supabase.auth.signUp({
           email: email.trim(),
@@ -69,7 +57,7 @@ export function Auth() {
       setMessage(
         text.toLowerCase().includes("duplicate")
           ? "That username is already taken."
-          : text || "Invalid username or password.",
+          : text || "Invalid email or password.",
       )
     } finally {
       setBusy(false)
@@ -82,27 +70,28 @@ export function Auth() {
         <h1>MTG Card Tracker</h1>
         <p>Fast, simple inventory tracking.</p>
 
-        <label>
-          Username
-          <input
-            value={username}
-            onChange={(event) => setUsername(event.target.value)}
-            autoComplete="username"
-            placeholder="sacho"
-          />
-        </label>
-
         {mode === "signup" && (
           <label>
-            Email
+            Username
             <input
-              type="email"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              autoComplete="email"
+              value={username}
+              onChange={(event) => setUsername(event.target.value)}
+              autoComplete="username"
+              placeholder="Username"
             />
           </label>
         )}
+
+        <label>
+          Email
+          <input
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.target.value)}
+            autoComplete="email"
+            placeholder="Email"
+          />
+        </label>
 
         <label>
           Password
@@ -111,6 +100,7 @@ export function Auth() {
             value={password}
             onChange={(event) => setPassword(event.target.value)}
             autoComplete={mode === "login" ? "current-password" : "new-password"}
+            placeholder="Password"
           />
         </label>
 
@@ -120,9 +110,9 @@ export function Auth() {
           className="primaryButton"
           disabled={
             busy ||
-            !username.trim() ||
+            !email.trim() ||
             !password ||
-            (mode === "signup" && !email.trim())
+            (mode === "signup" && !username.trim())
           }
           onClick={submit}
         >
