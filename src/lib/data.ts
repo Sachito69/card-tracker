@@ -9,6 +9,7 @@ import type {
   NotificationItem,
   TransactionHistoryItem,
   TransactionType,
+  PendingItem,
 } from "./types"
 import type { ScryfallCard } from "./scryfall"
 import { cardColors, cardImage } from "./scryfall"
@@ -51,11 +52,22 @@ export async function fetchHolders(): Promise<Holder[]> {
   return (data ?? []) as Holder[]
 }
 
-export async function createHolder(name: string, type: HolderType, notes = ""): Promise<Holder> {
+export async function createHolder(
+  name: string,
+  type: HolderType,
+  notes = "",
+  format: string | null = null,
+): Promise<Holder> {
   const user_id = await getCurrentUserId()
   const { data, error } = await supabase
     .from("holders")
-    .insert({ user_id, name: name.trim(), type, notes: notes.trim() || null })
+    .insert({
+      user_id,
+      name: name.trim(),
+      type,
+      format: type === "deck" ? (format?.trim() || null) : null,
+      notes: notes.trim() || null,
+    })
     .select("*")
     .single()
 
@@ -86,8 +98,8 @@ export async function fetchCollection(): Promise<CollectionItem[]> {
       .from("collection_items")
       .select(`
         id,user_id,card_id,holder_id,quantity,condition,foil,created_at,
-        card:card_catalog(id,oracle_id,name,set_code,set_name,collector_number,image_url,type_line,colors,cmc,legalities),
-        holder:holders(id,user_id,name,type,notes,created_at)
+        card:card_catalog(id,oracle_id,name,set_code,set_name,collector_number,image_url,type_line,colors,color_identity,cmc,legalities),
+        holder:holders(id,user_id,name,type,format,notes,created_at)
       `)
       .order("created_at", { ascending: false }),
     supabase
@@ -100,7 +112,7 @@ export async function fetchCollection(): Promise<CollectionItem[]> {
       .from("card_transactions")
       .select(`
         id,owner_id,recipient_user_id,source_item_id,card_id,quantity,condition,foil,status,created_at,
-        card:card_catalog(id,oracle_id,name,set_code,set_name,collector_number,image_url,type_line,colors,cmc,legalities)
+        card:card_catalog(id,oracle_id,name,set_code,set_name,collector_number,image_url,type_line,colors,color_identity,cmc,legalities)
       `)
       .eq("recipient_user_id", userId)
       .eq("transaction_type", "loan")
@@ -185,6 +197,7 @@ export async function saveCatalogCard(card: ScryfallCard): Promise<CardCatalog> 
     image_url: cardImage(card),
     type_line: card.type_line ?? null,
     colors: cardColors(card),
+    color_identity: card.color_identity ?? cardColors(card),
     cmc: card.cmc ?? null,
     legalities: card.legalities ?? {},
   }
@@ -538,3 +551,97 @@ export async function fetchTransactionHistory(): Promise<TransactionHistoryItem[
     card_name: Array.isArray(row.card) ? row.card[0]?.name ?? "Unknown card" : row.card?.name ?? "Unknown card",
   })) as TransactionHistoryItem[]
 }
+
+
+export async function fetchPendingOutgoing(): Promise<PendingItem[]> {
+  const userId = await getCurrentUserId()
+
+  const [friendResult, txResult] = await Promise.all([
+    supabase
+      .from("friendships")
+      .select("id,user_a,user_b,requested_by,created_at")
+      .eq("requested_by", userId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("card_transactions")
+      .select(`
+        id,recipient_user_id,card_id,transaction_type,quantity,created_at,
+        card:card_catalog(name)
+      `)
+      .eq("owner_id", userId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false }),
+  ])
+
+  if (friendResult.error) throw friendResult.error
+  if (txResult.error) throw txResult.error
+
+  const targetIds = Array.from(
+    new Set(
+      (friendResult.data ?? [])
+        .map((row: any) => (row.user_a === userId ? row.user_b : row.user_a))
+        .concat((txResult.data ?? []).map((row: any) => row.recipient_user_id))
+        .filter(Boolean),
+    ),
+  )
+
+  let profileMap = new Map<string, string | null>()
+  if (targetIds.length) {
+    const { data: profiles, error } = await supabase
+      .from("profiles")
+      .select("user_id,username")
+      .in("user_id", targetIds)
+    if (error) throw error
+    profileMap = new Map<string, string | null>(
+      (profiles ?? []).map((row: any) => [
+        String(row.user_id),
+        row.username == null ? null : String(row.username),
+      ]),
+    )
+  }
+
+  const friendItems: PendingItem[] = (friendResult.data ?? []).map((row: any) => {
+    const targetId = row.user_a === userId ? row.user_b : row.user_a
+    return {
+      kind: "friend",
+      id: Number(row.id),
+      label: `Friend request to ${profileMap.get(targetId) ?? "user"}`,
+      detail: "Waiting for acceptance",
+      created_at: row.created_at,
+    }
+  })
+
+  const txItems: PendingItem[] = (txResult.data ?? []).map((row: any) => {
+    const card = Array.isArray(row.card) ? row.card[0] : row.card
+    const recipient = profileMap.get(row.recipient_user_id) ?? "user"
+    return {
+      kind: "transaction",
+      id: Number(row.id),
+      label: `${row.transaction_type === "loan" ? "Loan" : "Sale"} · ${card?.name ?? "Unknown card"}`,
+      detail: `${Number(row.quantity)} card(s) to ${recipient}`,
+      created_at: row.created_at,
+    }
+  })
+
+  return [...friendItems, ...txItems].sort(
+    (a, b) => +new Date(b.created_at) - +new Date(a.created_at),
+  )
+}
+
+export async function deletePending(item: PendingItem): Promise<void> {
+  const { error } = await supabase.rpc("delete_pending_request", {
+    p_kind: item.kind,
+    p_id: item.id,
+  })
+  if (error) throw error
+}
+
+
+export async function deleteDeck(deckId: number): Promise<void> {
+  const { error } = await supabase.rpc("delete_deck_safe", {
+    p_deck_id: deckId,
+  })
+  if (error) throw error
+}
+

@@ -7,6 +7,7 @@ export type Holder = {
   user_id: string
   name: string
   type: HolderType
+  format: string | null
   notes: string | null
   created_at: string
 }
@@ -40,6 +41,7 @@ export type CardCatalog = {
   image_url: string | null
   type_line: string | null
   colors: string[]
+  color_identity: string[]
   cmc: number | null
   legalities: Record<string, string>
 }
@@ -95,3 +97,19 @@ export type TransactionHistoryItem = {
   completed_at: string | null
   card_name: string
 }
+
+export type PendingItem =
+  | {
+      kind: "friend"
+      id: number
+      label: string
+      detail: string
+      created_at: string
+    }
+  | {
+      kind: "transaction"
+      id: number
+      label: string
+      detail: string
+      created_at: string
+    }

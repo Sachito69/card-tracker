@@ -1,40 +1,76 @@
 import { X } from "lucide-react"
-import type { Friend, Holder } from "../lib/types"
+import { DECK_FORMATS } from "../lib/formats"
+
+export type FilterContext = "cards" | "deck" | "binder" | "box"
 
 export type TrackerFilters = {
   colors: string[]
-  deckId: string
-  binderId: string
-  boxId: string
-  friendId: string
+  commanderColors: string[]
+  cardType: string
+  manaValue: string
+  deckFormat: string
 }
 
 export const EMPTY_FILTERS: TrackerFilters = {
   colors: [],
-  deckId: "",
-  binderId: "",
-  boxId: "",
-  friendId: "",
+  commanderColors: [],
+  cardType: "",
+  manaValue: "",
+  deckFormat: "",
+}
+
+const COLORS = [
+  ["W", "White"],
+  ["U", "Blue"],
+  ["B", "Black"],
+  ["R", "Red"],
+  ["G", "Green"],
+  ["C", "Colorless"],
+] as const
+
+function Checks({
+  values,
+  onToggle,
+}: {
+  values: string[]
+  onToggle: (value: string) => void
+}) {
+  return (
+    <div className="namedColorChecks">
+      {COLORS.map(([value, label]) => (
+        <label className="namedColorCheck" key={value}>
+          <input
+            type="checkbox"
+            checked={values.includes(value)}
+            onChange={() => onToggle(value)}
+          />
+          <span className={`manaDot mana-${value}`}>{value}</span>
+          <span>{label}</span>
+        </label>
+      ))}
+    </div>
+  )
 }
 
 export function FilterModal({
+  context,
   filters,
   onChange,
-  holders,
-  friends,
+  cardTypes,
   onClose,
 }: {
+  context: FilterContext
   filters: TrackerFilters
   onChange: (next: TrackerFilters) => void
-  holders: Holder[]
-  friends: Friend[]
+  cardTypes: string[]
   onClose: () => void
 }) {
-  const toggleColor = (color: string) => {
-    const colors = filters.colors.includes(color)
-      ? filters.colors.filter((value) => value !== color)
-      : [...filters.colors, color]
-    onChange({ ...filters, colors })
+  const toggle = (field: "colors" | "commanderColors", value: string) => {
+    const current = filters[field]
+    const next = current.includes(value)
+      ? current.filter((entry) => entry !== value)
+      : [...current, value]
+    onChange({ ...filters, [field]: next })
   }
 
   return (
@@ -42,59 +78,93 @@ export function FilterModal({
       <section className="modal smallModal" onMouseDown={(event) => event.stopPropagation()}>
         <header className="modalHeader">
           <div>
-            <h2>Filter cards</h2>
-            <p>Filter locally without reloading the tracker.</p>
+            <h2>Filters</h2>
+            <p>
+              {context === "cards"
+                ? "Filter your card tracker locally."
+                : context === "deck"
+                  ? "Filter decks by format."
+                  : "More filters will be added here later."}
+            </p>
           </div>
           <button className="iconButton" onClick={onClose}><X size={18} /></button>
         </header>
 
         <div className="modalBody">
-          <div className="filterSection">
-            <strong>Colors</strong>
-            <div className="colorChecks">
-              {["W", "U", "B", "R", "G", "C", "M"].map((color) => (
-                <label className="colorCheck" key={color}>
-                  <input type="checkbox" checked={filters.colors.includes(color)} onChange={() => toggleColor(color)} />
-                  <span>{color}</span>
-                </label>
-              ))}
+          {context === "cards" && (
+            <>
+              <div className="filterSection">
+                <strong>Colors</strong>
+                <Checks values={filters.colors} onToggle={(value) => toggle("colors", value)} />
+              </div>
+
+              <div className="filterSection">
+                <strong>Commander</strong>
+                <p className="filterHint">
+                  Shows cards whose color identity fits inside the selected commander colors.
+                </p>
+                <Checks
+                  values={filters.commanderColors}
+                  onToggle={(value) => toggle("commanderColors", value)}
+                />
+              </div>
+
+              <label>
+                Card type
+                <select
+                  value={filters.cardType}
+                  onChange={(event) => onChange({ ...filters, cardType: event.target.value })}
+                >
+                  <option value="">Any card type</option>
+                  {cardTypes.map((type) => (
+                    <option value={type} key={type}>{type}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Mana value
+                <select
+                  value={filters.manaValue}
+                  onChange={(event) => onChange({ ...filters, manaValue: event.target.value })}
+                >
+                  <option value="">Any mana value</option>
+                  {[0,1,2,3,4,5,6].map((value) => (
+                    <option value={String(value)} key={value}>{value}</option>
+                  ))}
+                  <option value="7+">7+</option>
+                </select>
+              </label>
+            </>
+          )}
+
+          {context === "deck" && (
+            <label>
+              Format
+              <select
+                value={filters.deckFormat}
+                onChange={(event) => onChange({ ...filters, deckFormat: event.target.value })}
+              >
+                <option value="">Any format</option>
+                {DECK_FORMATS.map((format) => (
+                  <option value={format} key={format}>{format}</option>
+                ))}
+                <option value="__none__">Unspecified</option>
+              </select>
+            </label>
+          )}
+
+          {(context === "binder" || context === "box") && (
+            <div className="workingNotice">
+              <strong>No filters yet</strong>
+              <p>Still working on filters for {context === "binder" ? "binders" : "boxes"}.</p>
             </div>
-          </div>
-
-          <label>
-            Deck
-            <select value={filters.deckId} onChange={(event) => onChange({ ...filters, deckId: event.target.value })}>
-              <option value="">Any deck</option>
-              {holders.filter((holder) => holder.type === "deck").map((holder) => <option key={holder.id} value={holder.id}>{holder.name}</option>)}
-            </select>
-          </label>
-
-          <label>
-            Binder
-            <select value={filters.binderId} onChange={(event) => onChange({ ...filters, binderId: event.target.value })}>
-              <option value="">Any binder</option>
-              {holders.filter((holder) => holder.type === "binder").map((holder) => <option key={holder.id} value={holder.id}>{holder.name}</option>)}
-            </select>
-          </label>
-
-          <label>
-            Box
-            <select value={filters.boxId} onChange={(event) => onChange({ ...filters, boxId: event.target.value })}>
-              <option value="">Any box</option>
-              {holders.filter((holder) => holder.type === "box").map((holder) => <option key={holder.id} value={holder.id}>{holder.name}</option>)}
-            </select>
-          </label>
-
-          <label>
-            Friend
-            <select value={filters.friendId} onChange={(event) => onChange({ ...filters, friendId: event.target.value })}>
-              <option value="">Any friend</option>
-              {friends.map((friend) => <option key={friend.user_id} value={friend.user_id}>@{friend.username ?? "user"}</option>)}
-            </select>
-          </label>
+          )}
 
           <div className="modalFooterButtons">
-            <button className="secondaryButton" onClick={() => onChange(EMPTY_FILTERS)}>Clear filters</button>
+            <button className="secondaryButton" onClick={() => onChange(EMPTY_FILTERS)}>
+              Clear filters
+            </button>
             <button className="primaryButton" onClick={onClose}>Done</button>
           </div>
         </div>

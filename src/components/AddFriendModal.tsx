@@ -44,7 +44,7 @@ export function AddFriendModal({ onClose }: { onClose: () => void }) {
           <div className="peopleList">
             {results.map((user) => (
               <div className="personActionRow" key={user.user_id}>
-                <div><strong>@{user.username ?? "user"}</strong><small>Registered user</small></div>
+                <div><strong>{user.username ?? "user"}</strong><small>Registered user</small></div>
                 <button className="primaryButton" onClick={() => add.mutate(user.user_id)} disabled={add.isPending}><UserPlus size={14} /> Add</button>
               </div>
             ))}

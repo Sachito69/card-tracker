@@ -2,6 +2,7 @@ import { useState } from "react"
 import { X } from "lucide-react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { createHolder } from "../lib/data"
+import { DECK_FORMATS } from "../lib/formats"
 import type { HolderType } from "../lib/types"
 
 type Props = {
@@ -19,9 +20,10 @@ export function HolderCreateModal({ type, onClose }: Props) {
   const queryClient = useQueryClient()
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
+  const [format, setFormat] = useState("Commander")
 
   const create = useMutation({
-    mutationFn: () => createHolder(name, type, notes),
+    mutationFn: () => createHolder(name, type, notes, type === "deck" ? format : null),
     onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["holders"] })
       onClose()
@@ -49,6 +51,17 @@ export function HolderCreateModal({ type, onClose }: Props) {
               placeholder={`${labels[type]} name`}
             />
           </label>
+
+          {type === "deck" && (
+            <label>
+              Format
+              <select value={format} onChange={(event) => setFormat(event.target.value)}>
+                {DECK_FORMATS.map((value) => (
+                  <option value={value} key={value}>{value}</option>
+                ))}
+              </select>
+            </label>
+          )}
 
           <label>
             Notes <span className="mutedInline">optional</span>

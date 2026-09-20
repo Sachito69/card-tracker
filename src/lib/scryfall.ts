@@ -25,6 +25,7 @@ export type ScryfallCard = {
   collector_number: string
   type_line?: string
   colors?: string[]
+  color_identity?: string[]
   cmc?: number
   legalities?: Record<string, string>
   image_uris?: { normal?: string }

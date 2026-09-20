@@ -7,6 +7,7 @@ import type { CollectionItem, Holder } from "../lib/types"
 
 type Props = {
   holders: Holder[]
+  defaultHolderId?: number | null
   onClose: () => void
 }
 
@@ -38,7 +39,7 @@ function parseBulkLines(text: string): BulkRow[] {
     })
 }
 
-export function AddCardModal({ holders, onClose }: Props) {
+export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props) {
   const queryClient = useQueryClient()
   const [mode, setMode] = useState<"single" | "bulk">("single")
 
@@ -50,7 +51,7 @@ export function AddCardModal({ holders, onClose }: Props) {
 
   const [condition, setCondition] = useState<CollectionItem["condition"]>("NM")
   const [foil, setFoil] = useState(false)
-  const [holderId, setHolderId] = useState<string>("")
+  const [holderId, setHolderId] = useState<string>(defaultHolderId ? String(defaultHolderId) : "")
 
   const [bulkText, setBulkText] = useState("")
   const [bulkRows, setBulkRows] = useState<BulkRow[]>([])
@@ -228,30 +229,40 @@ export function AddCardModal({ holders, onClose }: Props) {
                 </div>
               </label>
 
-              {printings.length > 0 && (
-                <>
-                  <label>
-                    Printing
-                    <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
-                      {printings.map((card) => (
-                        <option key={card.id} value={card.id}>
-                          {card.set_name} · {card.set.toUpperCase()} #{card.collector_number}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+              <div className="cardLookupReservedSpace">
+                {printings.length > 0 ? (
+                  <>
+                    <label>
+                      Printing
+                      <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
+                        {printings.map((card) => (
+                          <option key={card.id} value={card.id}>
+                            {card.set_name} · {card.set.toUpperCase()} #{card.collector_number}
+                          </option>
+                        ))}
+                      </select>
+                    </label>
 
-                  {selected && cardImage(selected) && (
-                    <img
-                      className="previewCard"
-                      src={cardImage(selected) ?? ""}
-                      alt={selected.name}
-                      loading="lazy"
-                      decoding="async"
-                    />
-                  )}
-                </>
-              )}
+                    <div className="previewCardSlot">
+                      {selected && cardImage(selected) ? (
+                        <img
+                          className="previewCard"
+                          src={cardImage(selected) ?? ""}
+                          alt={selected.name}
+                          loading="lazy"
+                          decoding="async"
+                        />
+                      ) : (
+                        <div className="previewCardPlaceholder">Card preview</div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div className="previewCardSlot emptyPreviewSlot">
+                    <div className="previewCardPlaceholder">Card preview will appear here</div>
+                  </div>
+                )}
+              </div>
 
               <div className="formGrid">
                 <label>

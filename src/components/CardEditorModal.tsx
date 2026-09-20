@@ -35,7 +35,10 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
   })
 
   const remove = useMutation({
-    mutationFn: () => deleteCollectionItem(item.id),
+    mutationFn: () =>
+      item.holder_id !== null
+        ? moveCollectionQuantity(item.id, item.quantity, null)
+        : deleteCollectionItem(item.id),
     onSuccess: async () => { await refresh(); onClose() },
   })
 
@@ -55,7 +58,7 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
         <header className="modalHeader">
           <div>
             <h2>{item.card.name}</h2>
-            <p>{isBorrowed ? `Borrowed from @${item.loan_friend_username ?? "user"}` : isLent ? `Lent ${item.lent_quantity}× to @${item.loan_friend_username ?? "friend"}` : item.card.set_name}</p>
+            <p>{isBorrowed ? `Borrowed from ${item.loan_friend_username ?? "user"}` : isLent ? `Lent ${item.lent_quantity}× to ${item.loan_friend_username ?? "friend"}` : item.card.set_name}</p>
           </div>
           <button className="iconButton" onClick={onClose}><X size={18} /></button>
         </header>
@@ -100,7 +103,24 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
 
               {(save.error || remove.error || move.error) && <p className="errorText">{save.error?.message ?? remove.error?.message ?? move.error?.message}</p>}
               <div className="editorActions">
-                <button className="dangerButton" disabled={isLent || remove.isPending} onClick={() => { if (confirm(`Remove ${item.card.name} from your tracker?`)) remove.mutate() }}><Trash2 size={15} /> Remove</button>
+                <button
+                  className={item.holder_id !== null ? "secondaryButton" : "dangerButton"}
+                  disabled={isLent || remove.isPending}
+                  onClick={() => {
+                    const message =
+                      item.holder_id !== null
+                        ? `Move all ${item.card.name} copies from ${item.holder?.name ?? "this holder"} to My Collection?`
+                        : `Remove ${item.card.name} from your tracker?`
+                    if (confirm(message)) remove.mutate()
+                  }}
+                >
+                  {item.holder_id !== null ? <MoveRight size={15} /> : <Trash2 size={15} />}
+                  {remove.isPending
+                    ? "Working..."
+                    : item.holder_id !== null
+                      ? "Remove from holder"
+                      : "Remove"}
+                </button>
                 <button className="primaryButton" disabled={save.isPending} onClick={() => save.mutate()}>{save.isPending ? "Saving..." : "Save details"}</button>
               </div>
             </>

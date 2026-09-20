@@ -28,7 +28,7 @@ export function FriendsListModal({ onClose }: { onClose: () => void }) {
             {!friends.isLoading && !(friends.data ?? []).length && <p className="settingsHint">No accepted friends yet.</p>}
             {(friends.data ?? []).map((friend) => (
               <div className="personActionRow" key={friend.user_id}>
-                <div><strong>@{friend.username ?? "user"}</strong><small>Requests require their approval</small></div>
+                <div><strong>{friend.username ?? "user"}</strong><small>Requests require their approval</small></div>
                 <div className="rowActions">
                   <button className="secondaryButton" onClick={() => setSelected({ recipient: { kind: "friend", value: friend }, type: "loan" })}><HandCoins size={14} /> Lend</button>
                   <button className="secondaryButton" onClick={() => setSelected({ recipient: { kind: "friend", value: friend }, type: "sale" })}><ShoppingCart size={14} /> Sell</button>

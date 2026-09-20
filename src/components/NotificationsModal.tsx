@@ -37,13 +37,13 @@ export function NotificationsModal({ onClose }: { onClose: () => void }) {
             <div className="notificationRow" key={`${item.kind}-${item.id}`}>
               <div>
                 {item.kind === "friend" ? (
-                  <><strong>Friend request</strong><small>@{item.from_username ?? "user"} wants to add you.</small></>
+                  <><strong>Friend request</strong><small>{item.from_username ?? "user"} wants to add you.</small></>
                 ) : item.kind === "return" ? (
-                  <><strong>Return request</strong><small>@{item.other_username ?? "user"} is returning {item.quantity}× {item.card_name}.</small></>
+                  <><strong>Return request</strong><small>{item.other_username ?? "user"} is returning {item.quantity}× {item.card_name}.</small></>
                 ) : (
                   <>
                     <strong>{item.kind === "loan" ? "Loan request" : "Sale request"}</strong>
-                    <small>@{item.other_username ?? "user"} · {item.quantity}× {item.card_name}{item.kind === "sale" && item.price_per_card != null ? ` · ₱${item.price_per_card}/card` : ""}</small>
+                    <small>{item.other_username ?? "user"} · {item.quantity}× {item.card_name}{item.kind === "sale" && item.price_per_card != null ? ` · ₱${item.price_per_card}/card` : ""}</small>
                   </>
                 )}
               </div>
