@@ -107,7 +107,7 @@ function matchesManaValue(item: CollectionItem, value: string) {
   return cmc === Number(value)
 }
 
-export function Tracker() {
+export function Tracker({ userId }: { userId: string }) {
   const queryClient = useQueryClient()
   const [view, setView] = useState<CollectionView>("cards")
   const [search, setSearch] = useState("")
@@ -136,11 +136,11 @@ export function Tracker() {
     return () => document.removeEventListener("mousedown", closeMenus)
   }, [])
 
-  const collectionQuery = useQuery({ queryKey: ["collection"], queryFn: fetchCollection, staleTime: 60_000 })
-  const holdersQuery = useQuery({ queryKey: ["holders"], queryFn: fetchHolders, staleTime: 5 * 60_000 })
-  const notificationsQuery = useQuery({ queryKey: ["notifications"], queryFn: fetchNotifications, refetchInterval: 30_000, staleTime: 15_000 })
-  const profileQuery = useQuery({ queryKey: ["profile"], queryFn: fetchCurrentProfile, staleTime: 5 * 60_000 })
-  const pendingQuery = useQuery({ queryKey: ["pending"], queryFn: fetchPendingOutgoing, refetchInterval: 30_000, staleTime: 15_000 })
+  const collectionQuery = useQuery({ queryKey: ["collection", userId], queryFn: fetchCollection, staleTime: 60_000 })
+  const holdersQuery = useQuery({ queryKey: ["holders", userId], queryFn: fetchHolders, staleTime: 5 * 60_000 })
+  const notificationsQuery = useQuery({ queryKey: ["notifications", userId], queryFn: fetchNotifications, refetchInterval: 30_000, staleTime: 15_000 })
+  const profileQuery = useQuery({ queryKey: ["profile", userId], queryFn: fetchCurrentProfile, staleTime: 5 * 60_000 })
+  const pendingQuery = useQuery({ queryKey: ["pending", userId], queryFn: fetchPendingOutgoing, refetchInterval: 30_000, staleTime: 15_000 })
 
   const items = collectionQuery.data ?? []
   const holders = holdersQuery.data ?? []
@@ -311,6 +311,7 @@ export function Tracker() {
   async function logout() {
     setShowMainMenu(false)
     await supabase.auth.signOut()
+    queryClient.clear()
   }
 
   const addLabel = selectedHolder ? "Add Card" : `Add ${singularLabels[view]}`
@@ -549,7 +550,7 @@ export function Tracker() {
                   {item.loan_role === "borrower"
                     ? `Borrowed from ${item.loan_friend_username ?? "user"}`
                     : item.loan_role === "lender"
-                      ? `Lent ×${item.lent_quantity ?? 0}`
+                      ? `Lent to ${(item.loan_recipient_names ?? [item.loan_friend_username ?? "recipient"]).join(", ")}`
                       : "Available"}
                 </span>
               </button>
@@ -576,11 +577,21 @@ export function Tracker() {
                     {item.card.image_url ? <img src={item.card.image_url} alt={item.card.name} loading="lazy" decoding="async" /> : <div className="noImage">No image</div>}
                     <span className="qtyBadge">×{item.quantity}</span>
                     {item.loan_role === "borrower" && <span className="loanBadge borrowed">Borrowed</span>}
-                    {item.loan_role === "lender" && <span className="loanBadge lent">Lent ×{item.lent_quantity}</span>}
+                    {item.loan_role === "lender" && (
+                      <span className="loanBadge lent">
+                        Lent to {(item.loan_recipient_names ?? [item.loan_friend_username ?? "recipient"]).join(", ")}
+                      </span>
+                    )}
                   </div>
                   <div className="cardInfo">
                     <strong>{item.card.name}</strong>
-                    <small>{item.loan_role === "borrower" ? `From ${item.loan_friend_username ?? "user"}` : item.holder?.name ?? "My Collection"}</small>
+                    <small>
+                      {item.loan_role === "borrower"
+                        ? `From ${item.loan_friend_username ?? "user"}`
+                        : item.loan_role === "lender"
+                          ? `Lent to ${(item.loan_recipient_names ?? [item.loan_friend_username ?? "recipient"]).join(", ")}`
+                          : item.holder?.name ?? "My Collection"}
+                    </small>
                     <small>{item.condition}{item.foil ? " · Foil" : ""}</small>
                   </div>
                 </button>

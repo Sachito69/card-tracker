@@ -46,6 +46,15 @@ export type CardCatalog = {
   legalities: Record<string, string>
 }
 
+
+export type ActiveLoanDetail = {
+  transaction_id: number
+  recipient_kind: "user" | "contact"
+  recipient_name: string
+  quantity: number
+  status: TransactionStatus
+}
+
 export type CollectionItem = {
   id: number
   user_id: string
@@ -63,6 +72,8 @@ export type CollectionItem = {
   loan_friend_id?: string | null
   loan_friend_username?: string | null
   loan_friend_ids?: string[]
+  loan_recipient_names?: string[]
+  active_loans?: ActiveLoanDetail[]
   lent_quantity?: number
 }
 

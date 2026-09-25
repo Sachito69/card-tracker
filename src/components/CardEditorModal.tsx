@@ -1,7 +1,13 @@
 import { useMemo, useState } from "react"
 import { CornerUpLeft, MoveRight, Trash2, X } from "lucide-react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
-import { deleteCollectionItem, moveCollectionQuantity, requestLoanReturn, updateCollectionItem } from "../lib/data"
+import {
+  completeContactLoan,
+  deleteCollectionItem,
+  moveCollectionQuantity,
+  requestLoanReturn,
+  updateCollectionItem,
+} from "../lib/data"
 import type { CollectionItem, Holder } from "../lib/types"
 
 export function CardEditorModal({ item, holders, onClose }: { item: CollectionItem; holders: Holder[]; onClose: () => void }) {
@@ -14,6 +20,11 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
 
   const isBorrowed = item.loan_role === "borrower"
   const isLent = item.loan_role === "lender" && (item.lent_quantity ?? 0) > 0
+  const activeLoans = item.active_loans ?? []
+  const lentToLabel =
+    item.loan_recipient_names?.length
+      ? item.loan_recipient_names.join(", ")
+      : item.loan_friend_username ?? "recipient"
   const holderGroups = useMemo(() => ({
     deck: holders.filter((holder) => holder.type === "deck"),
     binder: holders.filter((holder) => holder.type === "binder"),
@@ -52,13 +63,26 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
     onSuccess: async () => { await refresh(); onClose() },
   })
 
+  const completeLocalReturn = useMutation({
+    mutationFn: (transactionId: number) => completeContactLoan(transactionId),
+    onSuccess: async () => {
+      await refresh()
+    },
+  })
+
   return (
     <div className="modalBackdrop" onMouseDown={onClose}>
       <section className="modal smallModal" onMouseDown={(event) => event.stopPropagation()}>
         <header className="modalHeader">
           <div>
             <h2>{item.card.name}</h2>
-            <p>{isBorrowed ? `Borrowed from ${item.loan_friend_username ?? "user"}` : isLent ? `Lent ${item.lent_quantity}× to ${item.loan_friend_username ?? "friend"}` : item.card.set_name}</p>
+            <p>
+              {isBorrowed
+                ? `Borrowed from ${item.loan_friend_username ?? "user"}`
+                : isLent
+                  ? `Lent ${item.lent_quantity}× to ${lentToLabel}`
+                  : item.card.set_name}
+            </p>
           </div>
           <button className="iconButton" onClick={onClose}><X size={18} /></button>
         </header>
@@ -84,7 +108,43 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
               <label className="checkRow"><input type="checkbox" checked={foil} onChange={(event) => setFoil(event.target.checked)} /> Foil</label>
 
               {isLent ? (
-                <div className="lockedMove"><strong>Move unavailable</strong><small>This stack currently has lent cards. Return them before moving the stack.</small></div>
+                <>
+                  <div className="loanRecipientList">
+                    <strong>Currently lent to</strong>
+                    {activeLoans.map((loan) => (
+                      <div className="loanRecipientRow" key={loan.transaction_id}>
+                        <div>
+                          <span>{loan.recipient_name}</span>
+                          <small>{loan.quantity}× {item.card.name}</small>
+                        </div>
+
+                        {loan.recipient_kind === "contact" && (
+                          <button
+                            className="secondaryButton"
+                            disabled={completeLocalReturn.isPending}
+                            onClick={() => {
+                              if (confirm(`Mark ${loan.quantity}× ${item.card.name} as returned from ${loan.recipient_name}?`)) {
+                                completeLocalReturn.mutate(loan.transaction_id)
+                              }
+                            }}
+                          >
+                            <CornerUpLeft size={14} />
+                            Return
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {completeLocalReturn.error && (
+                    <p className="errorText">{completeLocalReturn.error.message}</p>
+                  )}
+
+                  <div className="lockedMove">
+                    <strong>Move unavailable</strong>
+                    <small>This stack currently has lent cards. Return them before moving the stack.</small>
+                  </div>
+                </>
               ) : (
                 <div className="movePanel">
                   <strong>Move cards</strong>

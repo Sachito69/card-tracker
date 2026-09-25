@@ -86,6 +86,8 @@ function normalizeCardRelation(row: any): CollectionItem {
     loan_friend_id: null,
     loan_friend_username: null,
     loan_friend_ids: [],
+    loan_recipient_names: [],
+    active_loans: [],
     lent_quantity: 0,
   } as CollectionItem
 }
@@ -104,7 +106,7 @@ export async function fetchCollection(): Promise<CollectionItem[]> {
       .order("created_at", { ascending: false }),
     supabase
       .from("card_transactions")
-      .select("id,source_item_id,recipient_user_id,quantity,status")
+      .select("id,source_item_id,recipient_user_id,recipient_contact_id,quantity,status")
       .eq("owner_id", userId)
       .eq("transaction_type", "loan")
       .in("status", ["active", "return_pending"]),
@@ -132,6 +134,12 @@ export async function fetchCollection(): Promise<CollectionItem[]> {
     ...incoming.map((row: any) => row.owner_id).filter(Boolean),
   ]))
 
+  const contactIds = Array.from(new Set(
+    outgoing
+      .map((row: any) => row.recipient_contact_id)
+      .filter(Boolean),
+  ))
+
   let profileMap = new Map<string, string | null>()
   if (friendIds.length) {
     const { data: profiles, error } = await supabase
@@ -139,7 +147,27 @@ export async function fetchCollection(): Promise<CollectionItem[]> {
       .select("user_id,username")
       .in("user_id", friendIds)
     if (error) throw error
-    profileMap = new Map((profiles ?? []).map((row: any) => [row.user_id, row.username]))
+    profileMap = new Map(
+      (profiles ?? []).map((row: any) => [
+        String(row.user_id),
+        row.username == null ? null : String(row.username),
+      ]),
+    )
+  }
+
+  let contactMap = new Map<number, string>()
+  if (contactIds.length) {
+    const { data: contacts, error } = await supabase
+      .from("contacts")
+      .select("id,name")
+      .in("id", contactIds)
+    if (error) throw error
+    contactMap = new Map(
+      (contacts ?? []).map((row: any) => [
+        Number(row.id),
+        String(row.name ?? "Contact"),
+      ]),
+    )
   }
 
   const outgoingByItem = new Map<number, any[]>()
@@ -153,11 +181,39 @@ export async function fetchCollection(): Promise<CollectionItem[]> {
   for (const item of owned) {
     const loans = outgoingByItem.get(item.id) ?? []
     if (!loans.length) continue
+
     item.loan_role = "lender"
-    item.lent_quantity = loans.reduce((sum, tx) => sum + Number(tx.quantity || 0), 0)
-    item.loan_friend_ids = Array.from(new Set(loans.map((tx) => tx.recipient_user_id).filter(Boolean)))
+    item.lent_quantity = loans.reduce(
+      (sum, tx) => sum + Number(tx.quantity || 0),
+      0,
+    )
+
+    item.loan_friend_ids = Array.from(
+      new Set(loans.map((tx) => tx.recipient_user_id).filter(Boolean)),
+    )
+
+    item.active_loans = loans.map((tx) => {
+      const isContact = Boolean(tx.recipient_contact_id)
+      const recipientName = isContact
+        ? contactMap.get(Number(tx.recipient_contact_id)) ?? "Contact"
+        : profileMap.get(String(tx.recipient_user_id)) ?? "User"
+
+      return {
+        transaction_id: Number(tx.id),
+        recipient_kind: isContact ? "contact" : "user",
+        recipient_name: recipientName,
+        quantity: Number(tx.quantity || 0),
+        status: tx.status,
+      }
+    })
+
+    item.loan_recipient_names = Array.from(
+      new Set(item.active_loans.map((loan) => loan.recipient_name)),
+    )
+
     item.loan_friend_id = item.loan_friend_ids[0] ?? null
-    item.loan_friend_username = item.loan_friend_id ? profileMap.get(item.loan_friend_id) ?? null : null
+    item.loan_friend_username =
+      item.loan_recipient_names[0] ?? null
   }
 
   const borrowed: CollectionItem[] = (incoming as any[]).map((tx) => {
@@ -179,6 +235,8 @@ export async function fetchCollection(): Promise<CollectionItem[]> {
       loan_friend_id: tx.owner_id,
       loan_friend_username: profileMap.get(tx.owner_id) ?? null,
       loan_friend_ids: [tx.owner_id],
+      loan_recipient_names: [],
+      active_loans: [],
       lent_quantity: 0,
     }
   })
@@ -645,3 +703,11 @@ export async function deleteDeck(deckId: number): Promise<void> {
   if (error) throw error
 }
 
+
+
+export async function completeContactLoan(transactionId: number): Promise<void> {
+  const { error } = await supabase.rpc("complete_contact_loan", {
+    p_transaction_id: transactionId,
+  })
+  if (error) throw error
+}
