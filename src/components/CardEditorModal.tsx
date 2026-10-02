@@ -120,7 +120,7 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
 
                         {loan.recipient_kind === "contact" && (
                           <button
-                            className="secondaryButton"
+                            className="primaryButton"
                             disabled={completeLocalReturn.isPending}
                             onClick={() => {
                               if (confirm(`Mark ${loan.quantity}× ${item.card.name} as returned from ${loan.recipient_name}?`)) {
@@ -129,7 +129,7 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
                             }}
                           >
                             <CornerUpLeft size={14} />
-                            Return
+                            {completeLocalReturn.isPending ? "Returning..." : `Return from ${loan.recipient_name}`}
                           </button>
                         )}
                       </div>

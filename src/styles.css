@@ -861,3 +861,98 @@ button:disabled{opacity:.55;cursor:not-allowed}
   border-color:#7d4141;
   background:#3a2020;
 }
+
+/* Community / friends refresh */
+.friendsModal{width:min(920px,96vw)}
+.friendsHeader{padding-bottom:14px}
+.friendsBody{gap:22px}
+.peopleSection{display:flex;flex-direction:column;gap:10px}
+.peopleSectionHeader{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.peopleSectionHeader>div{display:flex;align-items:center;gap:8px}
+.peopleSectionHeader>span{min-width:24px;height:24px;display:grid;place-items:center;border-radius:999px;background:var(--panel2);color:var(--muted);font-size:12px}
+.friendCardList{display:grid;gap:10px}
+.friendCard{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:13px;border:1px solid var(--border);border-radius:12px;background:linear-gradient(180deg,#211914,#1b1511)}
+.friendCard:hover{border-color:#5c4737;background:linear-gradient(180deg,#261d17,#1d1712)}
+.localFriendCard{background:linear-gradient(180deg,#1e1a18,#191513)}
+.friendIdentity{min-width:0;display:flex;align-items:center;gap:11px}
+.friendIdentity>div{min-width:0;display:flex;flex-direction:column;gap:3px}
+.friendIdentity strong,.friendIdentity small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.friendIdentity small{color:var(--muted)}
+.friendAvatar{width:40px;height:40px;flex:0 0 auto;display:grid;place-items:center;border-radius:50%;background:#4a3525;color:#ffd8ad;font-weight:800;border:1px solid #654c39}
+.localAvatar{background:#2d3036;color:#d9e1ee;border-color:#454a54}
+.friendActions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.friendActions .secondaryButton{min-width:84px}
+.borrowButton{border-color:#4d6578!important;color:#b8d9ef!important}
+.migrateButton{border-color:#665544!important}
+.friendEmptyState{display:flex;align-items:center;gap:10px;padding:16px;border:1px dashed var(--border);border-radius:10px;color:var(--muted)}
+.friendEmptyState>div{display:flex;flex-direction:column}
+.friendEmptyState strong{color:var(--text)}
+.friendEmptyState small{display:block}
+.migrationFlow{display:grid;grid-template-columns:1fr auto 1fr;gap:12px;align-items:center}
+.migrationPerson{display:flex;align-items:center;gap:9px;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--panel)}
+.migrationPerson>div{min-width:0;display:flex;flex-direction:column;gap:2px}
+.migrationPerson strong,.migrationPerson small{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.migrationPerson small{color:var(--muted)}
+.migrationWarning{border-style:solid}
+.loanRecipientList{display:flex;flex-direction:column;gap:8px;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--panel)}
+.loanRecipientRow{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-top:8px;border-top:1px solid #392c22}
+.loanRecipientRow:first-of-type{border-top:0;padding-top:0}
+.loanRecipientRow>div{display:flex;flex-direction:column;gap:2px}
+.loanRecipientRow small{color:var(--muted)}
+
+@media(max-width:720px){
+  .friendCard{align-items:flex-start;flex-direction:column}
+  .friendActions{width:100%}
+  .friendActions button{flex:1}
+  .migrationFlow{grid-template-columns:1fr}
+  .migrationFlow>svg{transform:rotate(90deg);justify-self:center}
+}
+
+
+/* Missing-card borrow requests */
+.missingBorrowPanel{
+  display:flex;
+  flex-direction:column;
+  gap:12px;
+  margin-top:4px;
+  padding:16px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:var(--panel);
+}
+.missingBorrowHeading>div{display:flex;flex-direction:column;gap:4px}
+.missingBorrowHeading small{color:var(--muted);line-height:1.4}
+.missingBorrowSearchInput{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  padding:0 10px;
+  border:1px solid var(--border);
+  border-radius:9px;
+  background:var(--panel2);
+}
+.missingBorrowSearchInput input{border:0!important;background:transparent!important;padding-left:0!important}
+.missingBorrowSelection{
+  display:grid;
+  grid-template-columns:120px minmax(0,1fr);
+  gap:14px;
+  align-items:start;
+}
+.missingBorrowPreview{
+  width:120px;
+  aspect-ratio:488/680;
+  overflow:hidden;
+  border:1px solid var(--border);
+  border-radius:9px;
+  background:#100c0a;
+}
+.missingBorrowPreview img{width:100%;height:100%;object-fit:cover;display:block}
+.missingBorrowFields{display:flex;flex-direction:column;gap:10px}
+.missingBorrowNotification{display:flex;align-items:center;gap:10px}
+.missingBorrowNotification img{width:42px;height:58px;object-fit:cover;border-radius:5px;flex:0 0 auto}
+.missingBorrowNotification>div{display:flex;flex-direction:column;gap:3px}
+.successText{margin:0;color:#89c58d;font-size:13px}
+@media(max-width:620px){
+  .missingBorrowSelection{grid-template-columns:86px minmax(0,1fr)}
+  .missingBorrowPreview{width:86px}
+}

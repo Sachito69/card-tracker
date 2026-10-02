@@ -1,6 +1,6 @@
 import { Check, X, XCircle } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
-import { fetchNotifications, respondFriendRequest, respondLoanReturn, respondUserTransaction } from "../lib/data"
+import { fetchNotifications, respondFriendRequest, respondLoanReturn, respondMissingBorrowRequest, respondUserTransaction } from "../lib/data"
 import type { NotificationItem } from "../lib/types"
 
 export function NotificationsModal({ onClose }: { onClose: () => void }) {
@@ -11,6 +11,7 @@ export function NotificationsModal({ onClose }: { onClose: () => void }) {
     mutationFn: async ({ item, accept }: { item: NotificationItem; accept: boolean }) => {
       if (item.kind === "friend") return respondFriendRequest(item.id, accept)
       if (item.kind === "return") return respondLoanReturn(item.id, accept)
+      if (item.kind === "missing_borrow") return respondMissingBorrowRequest(item.id, accept)
       return respondUserTransaction(item.id, accept)
     },
     onSuccess: async () => {
@@ -40,10 +41,28 @@ export function NotificationsModal({ onClose }: { onClose: () => void }) {
                   <><strong>Friend request</strong><small>{item.from_username ?? "user"} wants to add you.</small></>
                 ) : item.kind === "return" ? (
                   <><strong>Return request</strong><small>{item.other_username ?? "user"} is returning {item.quantity}× {item.card_name}.</small></>
+                ) : item.kind === "missing_borrow" ? (
+                  <div className="missingBorrowNotification">
+                    {item.image_url && <img src={item.image_url} alt="" loading="lazy" decoding="async" />}
+                    <div>
+                      <strong>Missing card borrow request</strong>
+                      <small>{item.requester_username ?? "user"} wants you to add {item.quantity}× {item.card_name} to your collection and lend it to them.</small>
+                    </div>
+                  </div>
                 ) : (
                   <>
-                    <strong>{item.kind === "loan" ? "Loan request" : "Sale request"}</strong>
-                    <small>{item.other_username ?? "user"} · {item.quantity}× {item.card_name}{item.kind === "sale" && item.price_per_card != null ? ` · ₱${item.price_per_card}/card` : ""}</small>
+                    <strong>
+                      {item.kind === "sale"
+                        ? "Sale request"
+                        : item.request_kind === "borrow"
+                          ? "Borrow request"
+                          : "Loan offer"}
+                    </strong>
+                    <small>
+                      {item.request_kind === "borrow"
+                        ? `${item.other_username ?? "user"} wants to borrow ${item.quantity}× ${item.card_name} from you.`
+                        : `${item.other_username ?? "user"} · ${item.quantity}× ${item.card_name}${item.kind === "sale" && item.price_per_card != null ? ` · ₱${item.price_per_card}/card` : ""}`}
+                    </small>
                   </>
                 )}
               </div>

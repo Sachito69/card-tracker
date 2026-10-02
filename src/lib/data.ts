@@ -1,5 +1,6 @@
 import { supabase } from "./supabase"
 import type {
+  BorrowableItem,
   CardCatalog,
   CollectionItem,
   Contact,
@@ -488,7 +489,7 @@ export async function respondLoanReturn(transactionId: number, confirm: boolean)
 export async function fetchNotifications(): Promise<NotificationItem[]> {
   const userId = await getCurrentUserId()
 
-  const [friendResult, incomingTxResult, returnResult] = await Promise.all([
+  const [friendResult, pendingTxResult, returnResult, missingBorrowResult] = await Promise.all([
     supabase
       .from("friendships")
       .select("id,user_a,user_b,requested_by,created_at")
@@ -496,33 +497,43 @@ export async function fetchNotifications(): Promise<NotificationItem[]> {
       .or(`user_a.eq.${userId},user_b.eq.${userId}`),
     supabase
       .from("card_transactions")
-      .select("id,owner_id,recipient_user_id,card_id,transaction_type,quantity,price_per_card,created_at")
-      .eq("recipient_user_id", userId)
-      .eq("status", "pending"),
+      .select("id,owner_id,recipient_user_id,requested_by,card_id,transaction_type,quantity,price_per_card,created_at")
+      .eq("status", "pending")
+      .or(`owner_id.eq.${userId},recipient_user_id.eq.${userId}`),
     supabase
       .from("card_transactions")
       .select("id,owner_id,recipient_user_id,card_id,quantity,price_per_card,created_at")
       .eq("owner_id", userId)
       .eq("transaction_type", "loan")
       .eq("status", "return_pending"),
+    supabase
+      .from("borrow_card_requests")
+      .select("id,owner_user_id,requester_user_id,card_id,quantity,created_at")
+      .eq("owner_user_id", userId)
+      .eq("status", "pending"),
   ])
 
   if (friendResult.error) throw friendResult.error
-  if (incomingTxResult.error) throw incomingTxResult.error
+  if (pendingTxResult.error) throw pendingTxResult.error
   if (returnResult.error) throw returnResult.error
+  if (missingBorrowResult.error) throw missingBorrowResult.error
 
   const friendRows = (friendResult.data ?? []).filter((row: any) => row.requested_by !== userId)
-  const txRows = incomingTxResult.data ?? []
+  const txRows = (pendingTxResult.data ?? []).filter((row: any) => row.requested_by !== userId)
   const returnRows = returnResult.data ?? []
+  const missingBorrowRows = missingBorrowResult.data ?? []
 
   const profileIds = Array.from(new Set([
     ...friendRows.map((row: any) => row.requested_by),
-    ...txRows.map((row: any) => row.owner_id),
+    ...txRows.map((row: any) => row.requested_by),
     ...returnRows.map((row: any) => row.recipient_user_id),
+    ...missingBorrowRows.map((row: any) => row.requester_user_id),
   ].filter(Boolean)))
+
   const cardIds = Array.from(new Set([
     ...txRows.map((row: any) => row.card_id),
     ...returnRows.map((row: any) => row.card_id),
+    ...missingBorrowRows.map((row: any) => row.card_id),
   ].filter(Boolean)))
 
   const [profilesResult, cardsResult] = await Promise.all([
@@ -530,7 +541,7 @@ export async function fetchNotifications(): Promise<NotificationItem[]> {
       ? supabase.from("profiles").select("user_id,username").in("user_id", profileIds)
       : Promise.resolve({ data: [], error: null } as any),
     cardIds.length
-      ? supabase.from("card_catalog").select("id,name").in("id", cardIds)
+      ? supabase.from("card_catalog").select("id,name,image_url").in("id", cardIds)
       : Promise.resolve({ data: [], error: null } as any),
   ])
 
@@ -549,6 +560,12 @@ export async function fetchNotifications(): Promise<NotificationItem[]> {
       row.name == null ? "Unknown card" : String(row.name),
     ]),
   )
+  const cardImages = new Map<string, string | null>(
+    (cardsResult.data ?? []).map((row: any) => [
+      String(row.id),
+      row.image_url == null ? null : String(row.image_url),
+    ]),
+  )
 
   const notifications: NotificationItem[] = [
     ...friendRows.map((row: any) => ({
@@ -562,11 +579,27 @@ export async function fetchNotifications(): Promise<NotificationItem[]> {
       kind: row.transaction_type as "loan" | "sale",
       id: row.id,
       owner_id: row.owner_id,
-      other_user_id: row.owner_id,
-      other_username: profiles.get(row.owner_id) ?? null,
+      other_user_id: row.requested_by,
+      other_username: profiles.get(row.requested_by) ?? null,
       card_name: cards.get(row.card_id) ?? "Unknown card",
       quantity: Number(row.quantity),
       price_per_card: row.price_per_card == null ? null : Number(row.price_per_card),
+      created_at: row.created_at,
+      request_kind:
+        row.transaction_type === "sale"
+          ? "sale" as const
+          : row.requested_by === row.recipient_user_id
+            ? "borrow" as const
+            : "lend" as const,
+    })),
+    ...missingBorrowRows.map((row: any) => ({
+      kind: "missing_borrow" as const,
+      id: Number(row.id),
+      requester_user_id: String(row.requester_user_id),
+      requester_username: profiles.get(String(row.requester_user_id)) ?? null,
+      card_name: cards.get(String(row.card_id)) ?? "Unknown card",
+      image_url: cardImages.get(String(row.card_id)) ?? null,
+      quantity: Number(row.quantity),
       created_at: row.created_at,
     })),
     ...returnRows.map((row: any) => ({
@@ -614,7 +647,7 @@ export async function fetchTransactionHistory(): Promise<TransactionHistoryItem[
 export async function fetchPendingOutgoing(): Promise<PendingItem[]> {
   const userId = await getCurrentUserId()
 
-  const [friendResult, txResult] = await Promise.all([
+  const [friendResult, txResult, missingResult] = await Promise.all([
     supabase
       .from("friendships")
       .select("id,user_a,user_b,requested_by,created_at")
@@ -624,22 +657,37 @@ export async function fetchPendingOutgoing(): Promise<PendingItem[]> {
     supabase
       .from("card_transactions")
       .select(`
-        id,recipient_user_id,card_id,transaction_type,quantity,created_at,
+        id,owner_id,recipient_user_id,requested_by,card_id,transaction_type,quantity,created_at,
         card:card_catalog(name)
       `)
-      .eq("owner_id", userId)
+      .eq("requested_by", userId)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false }),
+    supabase
+      .from("borrow_card_requests")
+      .select(`
+        id,owner_user_id,requester_user_id,card_id,quantity,created_at,
+        card:card_catalog(name)
+      `)
+      .eq("requester_user_id", userId)
       .eq("status", "pending")
       .order("created_at", { ascending: false }),
   ])
 
   if (friendResult.error) throw friendResult.error
   if (txResult.error) throw txResult.error
+  if (missingResult.error) throw missingResult.error
+
+  const txTargets = (txResult.data ?? []).map((row: any) =>
+    row.owner_id === userId ? row.recipient_user_id : row.owner_id,
+  )
 
   const targetIds = Array.from(
     new Set(
       (friendResult.data ?? [])
         .map((row: any) => (row.user_a === userId ? row.user_b : row.user_a))
-        .concat((txResult.data ?? []).map((row: any) => row.recipient_user_id))
+        .concat(txTargets)
+        .concat((missingResult.data ?? []).map((row: any) => row.owner_user_id))
         .filter(Boolean),
     ),
   )
@@ -672,17 +720,34 @@ export async function fetchPendingOutgoing(): Promise<PendingItem[]> {
 
   const txItems: PendingItem[] = (txResult.data ?? []).map((row: any) => {
     const card = Array.isArray(row.card) ? row.card[0] : row.card
-    const recipient = profileMap.get(row.recipient_user_id) ?? "user"
+    const targetId = row.owner_id === userId ? row.recipient_user_id : row.owner_id
+    const target = profileMap.get(targetId) ?? "user"
+    const isBorrowRequest = row.transaction_type === "loan" && row.owner_id !== userId
+
     return {
       kind: "transaction",
       id: Number(row.id),
-      label: `${row.transaction_type === "loan" ? "Loan" : "Sale"} · ${card?.name ?? "Unknown card"}`,
-      detail: `${Number(row.quantity)} card(s) to ${recipient}`,
+      label: `${isBorrowRequest ? "Borrow request" : row.transaction_type === "loan" ? "Loan" : "Sale"} · ${card?.name ?? "Unknown card"}`,
+      detail: isBorrowRequest
+        ? `${Number(row.quantity)} card(s) requested from ${target}`
+        : `${Number(row.quantity)} card(s) to ${target}`,
       created_at: row.created_at,
     }
   })
 
-  return [...friendItems, ...txItems].sort(
+  const missingItems: PendingItem[] = (missingResult.data ?? []).map((row: any) => {
+    const card = Array.isArray(row.card) ? row.card[0] : row.card
+    const target = profileMap.get(String(row.owner_user_id)) ?? "user"
+    return {
+      kind: "missing_borrow" as const,
+      id: Number(row.id),
+      label: `Missing card request · ${card?.name ?? "Unknown card"}`,
+      detail: `${Number(row.quantity)} card(s) requested from ${target}`,
+      created_at: row.created_at,
+    }
+  })
+
+  return [...friendItems, ...txItems, ...missingItems].sort(
     (a, b) => +new Date(b.created_at) - +new Date(a.created_at),
   )
 }
@@ -708,6 +773,72 @@ export async function deleteDeck(deckId: number): Promise<void> {
 export async function completeContactLoan(transactionId: number): Promise<void> {
   const { error } = await supabase.rpc("complete_contact_loan", {
     p_transaction_id: transactionId,
+  })
+  if (error) throw error
+}
+
+
+export async function fetchFriendBorrowableInventory(friendUserId: string): Promise<BorrowableItem[]> {
+  const { data, error } = await supabase.rpc("fetch_friend_borrowable_inventory", {
+    p_friend_user_id: friendUserId,
+  })
+  if (error) throw error
+
+  return (data ?? []).map((row: any) => ({
+    source_item_id: Number(row.source_item_id),
+    card_id: String(row.card_id),
+    card_name: String(row.card_name ?? "Unknown card"),
+    image_url: row.image_url ?? null,
+    holder_name: row.holder_name ?? null,
+    holder_type: row.holder_type ?? null,
+    quantity: Number(row.quantity),
+    available_quantity: Number(row.available_quantity),
+    condition: row.condition,
+    foil: Boolean(row.foil),
+  })) as BorrowableItem[]
+}
+
+export async function requestBorrowFromFriend(args: {
+  ownerUserId: string
+  sourceItemId: number
+  quantity: number
+}): Promise<void> {
+  const { error } = await supabase.rpc("request_borrow_from_friend", {
+    p_owner_user_id: args.ownerUserId,
+    p_source_item_id: args.sourceItemId,
+    p_quantity: args.quantity,
+  })
+  if (error) throw error
+}
+
+export async function migrateContactToUser(contactId: number, targetUserId: string): Promise<number> {
+  const { data, error } = await supabase.rpc("migrate_contact_to_user", {
+    p_contact_id: contactId,
+    p_target_user_id: targetUserId,
+  })
+  if (error) throw error
+  return Number(data ?? 0)
+}
+
+
+export async function requestMissingBorrowCard(args: {
+  ownerUserId: string
+  card: ScryfallCard
+  quantity: number
+}): Promise<void> {
+  const saved = await saveCatalogCard(args.card)
+  const { error } = await supabase.rpc("request_missing_borrow_card", {
+    p_owner_user_id: args.ownerUserId,
+    p_card_id: saved.id,
+    p_quantity: Math.max(1, args.quantity),
+  })
+  if (error) throw error
+}
+
+export async function respondMissingBorrowRequest(requestId: number, accept: boolean): Promise<void> {
+  const { error } = await supabase.rpc("respond_missing_borrow_request", {
+    p_request_id: requestId,
+    p_accept: accept,
   })
   if (error) throw error
 }

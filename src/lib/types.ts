@@ -95,9 +95,35 @@ export type TransactionNotification = {
   quantity: number
   price_per_card: number | null
   created_at: string
+  request_kind?: "borrow" | "lend" | "sale"
 }
 
-export type NotificationItem = FriendRequestNotification | TransactionNotification
+
+export type MissingBorrowNotification = {
+  kind: "missing_borrow"
+  id: number
+  requester_user_id: string
+  requester_username: string | null
+  card_name: string
+  image_url: string | null
+  quantity: number
+  created_at: string
+}
+
+export type BorrowableItem = {
+  source_item_id: number
+  card_id: string
+  card_name: string
+  image_url: string | null
+  holder_name: string | null
+  holder_type: HolderType | null
+  quantity: number
+  available_quantity: number
+  condition: CollectionItem["condition"]
+  foil: boolean
+}
+
+export type NotificationItem = FriendRequestNotification | TransactionNotification | MissingBorrowNotification
 
 export type TransactionHistoryItem = {
   id: number
@@ -119,6 +145,13 @@ export type PendingItem =
     }
   | {
       kind: "transaction"
+      id: number
+      label: string
+      detail: string
+      created_at: string
+    }
+  | {
+      kind: "missing_borrow"
       id: number
       label: string
       detail: string
