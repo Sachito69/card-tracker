@@ -1,6 +1,7 @@
 import { X } from "lucide-react"
 import { useQuery } from "@tanstack/react-query"
 import { fetchTransactionHistory } from "../lib/data"
+import { ListSkeleton } from "./Skeletons"
 
 export function HistoryModal({ onClose }: { onClose: () => void }) {
   const history = useQuery({
@@ -21,7 +22,7 @@ export function HistoryModal({ onClose }: { onClose: () => void }) {
         </header>
 
         <div className="modalBody historyBody">
-          {history.isLoading && <p className="settingsHint">Loading history...</p>}
+          {history.isLoading && <ListSkeleton rows={5} compact />}
           {history.error && <p className="errorText">{history.error.message}</p>}
           {!history.isLoading && !history.error && history.data?.length === 0 && (
             <p className="settingsHint">No loan or sale history yet.</p>

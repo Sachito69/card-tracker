@@ -6,6 +6,7 @@ import type { Contact, Friend, TransactionType } from "../lib/types"
 import { BorrowModal } from "./BorrowModal"
 import { MigrateContactModal } from "./MigrateContactModal"
 import { TransactionModal } from "./TransactionModal"
+import { ListSkeleton } from "./Skeletons"
 
 type SelectedTransaction =
   | { recipient: { kind: "friend"; value: Friend }; type: TransactionType }
@@ -42,7 +43,7 @@ export function FriendsListModal({ onClose }: { onClose: () => void }) {
               </div>
 
               {friends.isLoading ? (
-                <p className="settingsHint">Loading friends...</p>
+                <ListSkeleton rows={3} compact />
               ) : !friendRows.length ? (
                 <div className="friendEmptyState">
                   <UserRound size={26} />
@@ -85,7 +86,7 @@ export function FriendsListModal({ onClose }: { onClose: () => void }) {
               </div>
 
               {contacts.isLoading ? (
-                <p className="settingsHint">Loading contacts...</p>
+                <ListSkeleton rows={3} compact />
               ) : !contactRows.length ? (
                 <div className="friendEmptyState">
                   <UserRound size={26} />

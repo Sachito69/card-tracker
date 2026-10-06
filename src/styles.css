@@ -956,3 +956,1035 @@ button:disabled{opacity:.55;cursor:not-allowed}
   .missingBorrowSelection{grid-template-columns:86px minmax(0,1fr)}
   .missingBorrowPreview{width:86px}
 }
+
+/* =========================================================
+   Responsive / professional mobile layout
+   Desktop remains the existing layout. Mobile gets its own
+   navigation, bottom sheets, compact lists and touch targets.
+   ========================================================= */
+
+.mobileOnly{display:none}
+
+/* Small polish shared across devices */
+.cardTile,
+.friendCard,
+.holderDetailList,
+.modal,
+.searchBox{
+  box-shadow:0 1px 0 rgba(255,255,255,.02);
+}
+
+.primaryButton,
+.secondaryButton,
+.dangerButton,
+.iconButton,
+.backButton{
+  transition:background .15s ease,border-color .15s ease,transform .12s ease,opacity .12s ease;
+}
+
+.primaryButton:active,
+.secondaryButton:active,
+.dangerButton:active,
+.iconButton:active,
+.backButton:active{
+  transform:scale(.98);
+}
+
+.deckTypeHeading{
+  width:100%;
+  border:0;
+  color:var(--text);
+  background:transparent;
+  cursor:pointer;
+  text-align:left;
+}
+
+.deckTypeHeading>div{
+  display:flex;
+  align-items:center;
+  gap:7px;
+}
+
+.deckTypeHeading svg{
+  transition:transform .16s ease;
+}
+
+.deckGroupChevronOpen{
+  transform:rotate(90deg);
+}
+
+@media(max-width:767px){
+  :root{
+    --mobile-nav-height:74px;
+    --mobile-page-gutter:12px;
+    --radius:14px;
+  }
+
+  html,body,#root{
+    width:100%;
+    min-height:100%;
+    overflow-x:hidden;
+  }
+
+  body{
+    padding-bottom:calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+  }
+
+  .trackerPage{
+    min-height:100dvh;
+    padding-bottom:18px;
+  }
+
+  .desktopTopbar{
+    display:none!important;
+  }
+
+  .mobileOnly{
+    display:flex;
+  }
+
+  /* Page title becomes the mobile header instead of the desktop hotbar. */
+  .collectionHeading,
+  .holderOpenHeading{
+    min-height:70px;
+    align-items:center;
+    padding:16px var(--mobile-page-gutter) 8px;
+    background:linear-gradient(180deg,rgba(33,25,20,.78),rgba(23,18,15,0));
+  }
+
+  .collectionHeading h1,
+  .holderOpenHeading h1{
+    font-size:22px;
+    letter-spacing:-.015em;
+  }
+
+  .collectionHeading p,
+  .holderOpenHeading p{
+    font-size:12px;
+    line-height:1.35;
+  }
+
+  .holderOpenHeading{
+    gap:10px;
+  }
+
+  .holderOpenHeading .backButton{
+    width:42px;
+    min-width:42px;
+    height:42px;
+    padding:0;
+    border-radius:12px;
+    font-size:0;
+  }
+
+  .holderOpenHeading .backButton svg{
+    width:20px;
+    height:20px;
+  }
+
+  /* Search/filter stays reachable while scrolling.
+     Add moves to the center of the bottom navigation. */
+  .collectionControls{
+    position:sticky;
+    top:0;
+    z-index:18;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    gap:8px;
+    padding:9px var(--mobile-page-gutter)!important;
+    background:rgba(23,18,15,.94);
+    backdrop-filter:blur(14px);
+    border-bottom:1px solid rgba(74,58,45,.7);
+  }
+
+  .collectionControls .addContextButton{
+    display:none;
+  }
+
+  .searchBox{
+    height:44px;
+    min-width:0;
+    border-radius:12px;
+    background:#211914;
+  }
+
+  .searchBox input{
+    min-width:0;
+    font-size:16px; /* prevents iOS zoom */
+  }
+
+  .filterButton{
+    width:46px;
+    min-width:46px;
+    height:44px;
+    padding:0;
+    border-radius:12px;
+    font-size:0;
+  }
+
+  .filterButton svg{
+    width:19px;
+    height:19px;
+  }
+
+  .filterButton .filterCount{
+    position:absolute;
+    right:-5px;
+    top:-6px;
+    font-size:10px;
+  }
+
+  /* Two clear columns for phone-sized MTG cards. */
+  .cardGrid,
+  :root[data-density="compact"] .cardGrid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:10px;
+    padding:12px var(--mobile-page-gutter) 22px;
+  }
+
+  .cardTile{
+    min-width:0;
+    border-radius:11px;
+    transform:none!important;
+  }
+
+  .cardInfo{
+    gap:3px;
+    padding:8px;
+  }
+
+  .cardInfo strong{
+    font-size:13px;
+  }
+
+  .cardInfo small{
+    font-size:11px;
+  }
+
+  .qtyBadge{
+    right:6px;
+    bottom:6px;
+  }
+
+  .loanBadge{
+    max-width:calc(100% - 14px);
+    overflow:hidden;
+    white-space:nowrap;
+    text-overflow:ellipsis;
+  }
+
+  .loadMore{
+    padding-bottom:14px;
+  }
+
+  /* Deck / binder / box collection pages become cards rather than
+     horizontally scrolling desktop tables. */
+  .holderDetailList,
+  .deckCollectionList{
+    margin:12px var(--mobile-page-gutter) 24px;
+    border:0;
+    background:transparent;
+    overflow:visible;
+  }
+
+  .holderDetailHeader,
+  .deckCollectionHeader{
+    display:none;
+  }
+
+  .holderDetailRow,
+  .deckCollectionRow{
+    min-width:0!important;
+    display:grid;
+    grid-template-columns:minmax(0,1fr) auto;
+    gap:8px;
+    min-height:74px;
+    margin-bottom:9px;
+    padding:12px;
+    border:1px solid var(--border);
+    border-radius:13px;
+    background:linear-gradient(180deg,#211914,#1c1612);
+  }
+
+  .holderDetailRow:last-child{
+    border-bottom:1px solid var(--border);
+  }
+
+  .holderRowMain{
+    display:grid;
+    grid-column:1;
+    grid-template-columns:minmax(0,1fr);
+    gap:4px;
+  }
+
+  .holderRowMain::before{
+    border-radius:13px;
+  }
+
+  .holderNameCell{
+    gap:9px;
+  }
+
+  .holderNameCell svg{
+    color:var(--accent);
+  }
+
+  .holderRowMain>span{
+    color:var(--muted);
+    font-size:12px;
+  }
+
+  .holderRowMain>span:nth-of-type(1)::before{
+    content:"Cards · ";
+    color:#806f5d;
+  }
+
+  .holderNotes{
+    white-space:normal;
+  }
+
+  .deckOptionsWrap{
+    grid-column:2;
+    grid-row:1;
+    align-self:center;
+  }
+
+  .deckDeleteButton{
+    width:42px;
+    height:42px;
+    border-radius:12px;
+  }
+
+  /* Opened deck: compact grouped rows rather than a desktop table. */
+  .deckGroupedContents{
+    margin:12px var(--mobile-page-gutter) 24px;
+    gap:16px;
+  }
+
+  .deckTypeGroup{
+    gap:8px;
+  }
+
+  .deckTypeHeading{
+    min-height:42px;
+    padding:0 8px;
+    border-radius:10px;
+    background:#1b1511;
+  }
+
+  .deckTypeHeading strong{
+    font-size:14px;
+  }
+
+  .deckContentsList,
+  .holderContentsList{
+    margin:0;
+    border-radius:12px;
+    overflow:hidden;
+  }
+
+  .deckContentsHeader,
+  .holderContentsHeader{
+    display:none;
+  }
+
+  .deckContentsRow{
+    min-width:0!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-rows:auto auto;
+    gap:3px 10px;
+    min-height:70px;
+    padding:9px 10px;
+  }
+
+  .deckContentsRow .holderCardName{
+    grid-column:1;
+    grid-row:1 / span 2;
+  }
+
+  .deckContentsRow>span:nth-of-type(1){
+    grid-column:2;
+    grid-row:1;
+    align-self:center;
+    font-weight:800;
+  }
+
+  .deckContentsRow>span:nth-of-type(1)::before{
+    content:"×";
+    color:var(--muted);
+  }
+
+  .deckContentsRow>span:nth-of-type(2){
+    grid-column:2;
+    grid-row:2;
+    color:var(--muted);
+    font-size:11px;
+  }
+
+  .deckContentsRow>span:nth-of-type(3){
+    display:none;
+  }
+
+  .holderCardName img,
+  .holderCardThumbPlaceholder{
+    width:39px;
+    height:54px;
+  }
+
+  /* Generic opened binder/box rows. */
+  .holderContentsRow:not(.deckContentsRow){
+    min-width:0!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-rows:auto auto auto;
+    gap:3px 10px;
+    padding:9px 10px;
+  }
+
+  .holderContentsRow:not(.deckContentsRow) .holderCardName{
+    grid-column:1;
+    grid-row:1 / span 3;
+  }
+
+  .holderContentsRow:not(.deckContentsRow)>span{
+    grid-column:2;
+    color:var(--muted);
+    font-size:11px;
+    text-align:right;
+  }
+
+  .holderContentsRow:not(.deckContentsRow)>span:first-of-type{
+    color:var(--text);
+    font-weight:800;
+    font-size:13px;
+  }
+
+  /* Modal windows become native-feeling bottom sheets. */
+  .modalBackdrop{
+    place-items:end center;
+    padding:0;
+    background:rgba(0,0,0,.72);
+  }
+
+  .modal,
+  .smallModal,
+  .friendsModal,
+  .transactionModal,
+  .addCardModal{
+    width:100%!important;
+    max-width:none!important;
+    max-height:min(91dvh,900px);
+    border-left:0;
+    border-right:0;
+    border-bottom:0;
+    border-radius:20px 20px 0 0;
+    padding-bottom:env(safe-area-inset-bottom);
+    box-shadow:0 -16px 60px rgba(0,0,0,.5);
+  }
+
+  .modalHeader{
+    position:sticky;
+    top:0;
+    z-index:4;
+    padding:15px 14px;
+    background:rgba(29,22,18,.97);
+    backdrop-filter:blur(14px);
+  }
+
+  .modalHeader h2{
+    font-size:18px;
+  }
+
+  .modalBody{
+    padding:14px;
+  }
+
+  .iconButton,
+  .primaryButton,
+  .secondaryButton,
+  .dangerButton{
+    min-height:44px;
+  }
+
+  .modal input,
+  .modal select,
+  .bulkTextarea{
+    font-size:16px;
+  }
+
+  /* Friend/contact cards are stacked and finger-friendly. */
+  .friendsBody{
+    gap:18px;
+  }
+
+  .friendCard{
+    padding:13px;
+    gap:12px;
+    border-radius:14px;
+  }
+
+  .friendAvatar{
+    width:44px;
+    height:44px;
+  }
+
+  .friendActions{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    gap:7px;
+  }
+
+  .friendActions button{
+    width:100%;
+    min-width:0!important;
+    min-height:42px;
+    padding:0 7px;
+    font-size:12px;
+  }
+
+  .localFriendCard .friendActions{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+
+  /* Borrow/lend/sell browse stays visual and touch friendly. */
+  .transactionCardGrid{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:9px;
+    max-height:none;
+  }
+
+  .transactionCard{
+    border-radius:11px;
+  }
+
+  .cartPanel{
+    margin-bottom:4px;
+  }
+
+  .cartRow{
+    grid-template-columns:minmax(0,1fr) auto auto;
+    padding:10px;
+  }
+
+  /* Bottom navigation */
+  .mobileBottomNav{
+    position:fixed;
+    left:0;
+    right:0;
+    bottom:0;
+    z-index:85;
+    height:calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+    padding:7px 7px calc(7px + env(safe-area-inset-bottom));
+    align-items:flex-start;
+    justify-content:space-around;
+    gap:2px;
+    background:rgba(28,21,17,.96);
+    backdrop-filter:blur(18px);
+    border-top:1px solid rgba(100,77,58,.8);
+    box-shadow:0 -8px 28px rgba(0,0,0,.3);
+  }
+
+  .mobileBottomNav>button{
+    position:relative;
+    width:20%;
+    min-width:0;
+    height:54px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:3px;
+    padding:0 2px;
+    border:0;
+    border-radius:11px;
+    color:#a9957e;
+    background:transparent;
+    cursor:pointer;
+  }
+
+  .mobileBottomNav>button>span:last-child,
+  .mobileBottomNav>button>small{
+    font-size:10px;
+    font-weight:650;
+  }
+
+  .mobileBottomNav>button.active{
+    color:var(--accent);
+    background:rgba(216,185,93,.08);
+  }
+
+  .mobileBottomNav .mobileAddButton{
+    margin-top:-21px;
+    overflow:visible;
+  }
+
+  .mobileAddButton>span{
+    width:50px;
+    height:50px;
+    display:grid;
+    place-items:center;
+    border-radius:17px;
+    color:#20170e;
+    background:var(--accent);
+    border:1px solid #e4ca7c;
+    box-shadow:0 7px 22px rgba(0,0,0,.4);
+  }
+
+  .mobileAddButton>small{
+    color:var(--accent);
+  }
+
+  .mobileNavIcon{
+    position:relative;
+    display:grid!important;
+    place-items:center;
+  }
+
+  .mobileNavIcon i{
+    position:absolute;
+    top:-7px;
+    right:-9px;
+    min-width:17px;
+    height:17px;
+    display:grid;
+    place-items:center;
+    padding:0 4px;
+    border-radius:999px;
+    border:2px solid #1c1511;
+    color:#fff;
+    background:#cf594d;
+    font-size:9px;
+    font-style:normal;
+    font-weight:800;
+  }
+
+  /* Bottom-navigation sheets */
+  .mobileNavSheetBackdrop{
+    position:fixed;
+    inset:0;
+    z-index:78;
+    align-items:flex-end;
+    justify-content:center;
+    padding-bottom:calc(var(--mobile-nav-height) + env(safe-area-inset-bottom));
+    background:rgba(0,0,0,.5);
+    backdrop-filter:blur(2px);
+  }
+
+  .mobileNavSheet{
+    width:100%;
+    padding:8px 12px 14px;
+    border-top:1px solid var(--border);
+    border-radius:20px 20px 0 0;
+    background:#211914;
+    box-shadow:0 -18px 55px rgba(0,0,0,.4);
+  }
+
+  .sheetHandle{
+    width:38px;
+    height:4px;
+    margin:0 auto 12px;
+    border-radius:999px;
+    background:#675342;
+  }
+
+  .mobileSheetHeader{
+    padding:0 4px 12px;
+  }
+
+  .mobileSheetHeader>div{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+  }
+
+  .mobileSheetHeader strong{
+    font-size:17px;
+  }
+
+  .mobileSheetHeader small{
+    color:var(--muted);
+    line-height:1.35;
+  }
+
+  .mobileSheetGrid{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:7px;
+  }
+
+  .mobileSheetGrid button{
+    min-height:76px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    padding:7px 3px;
+    border:1px solid var(--border);
+    border-radius:13px;
+    color:var(--muted);
+    background:#1b1511;
+  }
+
+  .mobileSheetGrid button.active{
+    color:var(--accent);
+    border-color:#75613f;
+    background:#2c231a;
+  }
+
+  .mobileSheetGrid button span{
+    font-size:11px;
+    font-weight:700;
+  }
+
+  .mobileActionList{
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+  }
+
+  .mobileActionList>button{
+    width:100%;
+    min-height:58px;
+    display:grid;
+    grid-template-columns:32px minmax(0,1fr) auto;
+    gap:8px;
+    align-items:center;
+    padding:8px 10px;
+    border:0;
+    border-radius:12px;
+    color:var(--text);
+    background:transparent;
+    text-align:left;
+  }
+
+  .mobileActionList>button:active{
+    background:#30241c;
+  }
+
+  .mobileActionList>button>div{
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+  }
+
+  .mobileActionList strong{
+    font-size:14px;
+  }
+
+  .mobileActionList small{
+    color:var(--muted);
+    font-size:11px;
+    line-height:1.3;
+  }
+
+  .mobileDangerAction{
+    color:#ffab9f!important;
+  }
+
+  .mobileAccountCard{
+    display:flex;
+    flex-direction:column;
+    gap:3px;
+    margin:0 0 8px;
+    padding:11px 12px;
+    border:1px solid var(--border);
+    border-radius:12px;
+    background:#1a1410;
+  }
+
+  .mobileAccountCard small{
+    color:var(--muted);
+    font-size:11px;
+  }
+
+  /* Empty states feel intentional rather than unfinished. */
+  .emptyState{
+    margin:48px 18px;
+    padding:22px 12px;
+  }
+
+  .emptyState h2{
+    font-size:18px;
+  }
+}
+
+/* Tablet: retain desktop nav, but reduce density and avoid overly-wide layouts. */
+@media(min-width:768px) and (max-width:1023px){
+  .topbar{
+    padding:14px 18px;
+  }
+
+  .collectionHeading,
+  .holderOpenHeading{
+    padding-left:18px;
+    padding-right:18px;
+  }
+
+  .collectionControls{
+    padding-left:18px;
+    padding-right:18px;
+  }
+
+  .cardGrid{
+    grid-template-columns:repeat(auto-fill,minmax(150px,1fr));
+    padding-left:18px;
+    padding-right:18px;
+  }
+}
+
+
+/* =========================================================
+   Professional feedback: toasts, custom confirmations,
+   and skeleton loading states
+   ========================================================= */
+
+.toastViewport{
+  position:fixed;
+  top:18px;
+  right:18px;
+  z-index:140;
+  width:min(360px,calc(100vw - 24px));
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  pointer-events:none;
+}
+
+.appToast{
+  min-height:48px;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  gap:10px;
+  align-items:center;
+  padding:10px 11px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:rgba(31,24,19,.97);
+  box-shadow:0 14px 42px rgba(0,0,0,.38);
+  backdrop-filter:blur(16px);
+  pointer-events:auto;
+  animation:toastIn .2s ease-out;
+}
+
+.appToast>span{
+  font-size:13px;
+  line-height:1.35;
+  font-weight:650;
+}
+
+.toast-success>svg{color:#75c891}
+.toast-error>svg{color:#ef8278}
+.toast-info>svg{color:#d8b95d}
+
+.toastClose{
+  width:30px;
+  height:30px;
+  display:grid;
+  place-items:center;
+  padding:0;
+  border:0;
+  border-radius:8px;
+  color:var(--muted);
+  background:transparent;
+  cursor:pointer;
+}
+
+.toastClose:hover{background:#35291f;color:var(--text)}
+
+@keyframes toastIn{
+  from{opacity:0;transform:translateY(-8px) scale(.98)}
+  to{opacity:1;transform:none}
+}
+
+.confirmBackdrop{
+  position:fixed;
+  inset:0;
+  z-index:150;
+  display:grid;
+  place-items:center;
+  padding:20px;
+  background:rgba(0,0,0,.7);
+  backdrop-filter:blur(3px);
+}
+
+.confirmDialog{
+  width:min(420px,100%);
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  gap:12px;
+  padding:18px;
+  border:1px solid var(--border);
+  border-radius:16px;
+  background:#211914;
+  box-shadow:0 22px 70px rgba(0,0,0,.48);
+}
+
+.confirmIcon{
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  border-radius:12px;
+  color:#ddbf63;
+  background:#342a1d;
+}
+
+.confirmIcon.danger{
+  color:#ff978c;
+  background:#3b211e;
+}
+
+.confirmCopy h3{
+  margin:1px 0 5px;
+  font-size:17px;
+}
+
+.confirmCopy p{
+  margin:0;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.45;
+}
+
+.confirmActions{
+  grid-column:1 / -1;
+  display:flex;
+  justify-content:flex-end;
+  gap:8px;
+  margin-top:7px;
+}
+
+.skeleton{
+  position:relative;
+  overflow:hidden;
+  display:block;
+  border-radius:8px;
+  background:#34291f;
+}
+
+.skeleton::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  transform:translateX(-100%);
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.07),transparent);
+  animation:skeletonShimmer 1.25s infinite;
+}
+
+@keyframes skeletonShimmer{
+  100%{transform:translateX(100%)}
+}
+
+.skeletonCard{
+  overflow:hidden;
+  border:1px solid var(--border);
+  border-radius:11px;
+  background:#1d1713;
+}
+
+.skeletonCardImage{
+  width:100%;
+  aspect-ratio:488/680;
+  border-radius:0;
+}
+
+.skeletonCardText{
+  display:flex;
+  flex-direction:column;
+  gap:7px;
+  padding:9px;
+}
+
+.skeletonLine{
+  height:11px;
+}
+
+.skeletonLine.wide{width:82%}
+.skeletonLine.medium{width:56%}
+
+.listSkeleton{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin:14px 24px 24px;
+}
+
+.listSkeleton.compact{
+  margin:4px 0 10px;
+}
+
+.listSkeletonRow{
+  min-height:66px;
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr) auto;
+  gap:11px;
+  align-items:center;
+  padding:11px 12px;
+  border:1px solid var(--border);
+  border-radius:12px;
+  background:#1d1713;
+}
+
+.listSkeletonRow>div{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+.skeletonAvatar{
+  width:40px;
+  height:40px;
+  border-radius:999px;
+}
+
+.skeletonButton{
+  width:72px;
+  height:32px;
+}
+
+.notificationSkeleton .listSkeletonRow{
+  grid-template-columns:minmax(0,1fr) auto;
+}
+
+@media(max-width:767px){
+  .toastViewport{
+    top:auto;
+    right:12px;
+    bottom:calc(var(--mobile-nav-height) + env(safe-area-inset-bottom) + 12px);
+    width:calc(100vw - 24px);
+  }
+
+  .confirmBackdrop{
+    place-items:end center;
+    padding:0;
+  }
+
+  .confirmDialog{
+    width:100%;
+    border-left:0;
+    border-right:0;
+    border-bottom:0;
+    border-radius:20px 20px 0 0;
+    padding:18px 14px calc(14px + env(safe-area-inset-bottom));
+  }
+
+  .confirmActions{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+  }
+
+  .confirmActions button{
+    width:100%;
+  }
+
+  .listSkeleton{
+    margin:12px var(--mobile-page-gutter) 20px;
+  }
+}
+
+@media(prefers-reduced-motion:reduce){
+  .appToast,
+  .skeleton::after{
+    animation:none!important;
+  }
+}

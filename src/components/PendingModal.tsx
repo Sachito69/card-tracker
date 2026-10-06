@@ -2,9 +2,12 @@ import { Trash2, X } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { deletePending, fetchPendingOutgoing } from "../lib/data"
 import type { PendingItem } from "../lib/types"
+import { ListSkeleton } from "./Skeletons"
+import { useFeedback } from "./Feedback"
 
 export function PendingModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient()
+  const { toast } = useFeedback()
   const pending = useQuery({
     queryKey: ["pending"],
     queryFn: fetchPendingOutgoing,
@@ -14,6 +17,7 @@ export function PendingModal({ onClose }: { onClose: () => void }) {
   const remove = useMutation({
     mutationFn: (item: PendingItem) => deletePending(item),
     onSuccess: async () => {
+      toast("Pending request cancelled")
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["pending"] }),
         qc.invalidateQueries({ queryKey: ["collection"] }),
@@ -34,7 +38,7 @@ export function PendingModal({ onClose }: { onClose: () => void }) {
         </header>
 
         <div className="modalBody">
-          {pending.isLoading && <p className="settingsHint">Loading pending requests...</p>}
+          {pending.isLoading && <ListSkeleton rows={4} compact />}
           {!pending.isLoading && !(pending.data ?? []).length && (
             <p className="settingsHint">Nothing pending.</p>
           )}

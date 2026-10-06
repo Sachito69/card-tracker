@@ -5,6 +5,7 @@ import {
   Bell,
   Box,
   ChevronDown,
+  ChevronRight,
   Filter,
   History,
   Layers3,
@@ -41,6 +42,8 @@ import { HistoryModal } from "./HistoryModal"
 import { NotificationsModal } from "./NotificationsModal"
 import { PendingModal } from "./PendingModal"
 import { applySavedDensity, SettingsModal } from "./SettingsModal"
+import { CardGridSkeleton, ListSkeleton } from "./Skeletons"
+import { useFeedback } from "./Feedback"
 
 const PAGE_SIZE = 120
 
@@ -109,6 +112,7 @@ function matchesManaValue(item: CollectionItem, value: string) {
 
 export function Tracker({ userId }: { userId: string }) {
   const queryClient = useQueryClient()
+  const { confirm, toast } = useFeedback()
   const [view, setView] = useState<CollectionView>("cards")
   const [search, setSearch] = useState("")
   const [filters, setFilters] = useState<TrackerFilters>(EMPTY_FILTERS)
@@ -119,6 +123,7 @@ export function Tracker({ userId }: { userId: string }) {
   const [showMainMenu, setShowMainMenu] = useState(false)
   const [editing, setEditing] = useState<CollectionItem | null>(null)
   const [selectedHolder, setSelectedHolder] = useState<Holder | null>(null)
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const collectionMenuRef = useRef<HTMLDivElement>(null)
   const communityMenuRef = useRef<HTMLDivElement>(null)
   const mainMenuRef = useRef<HTMLDivElement>(null)
@@ -300,6 +305,7 @@ export function Tracker({ userId }: { userId: string }) {
   const deleteDeckMutation = useMutation({
     mutationFn: (deckId: number) => deleteDeck(deckId),
     onSuccess: async () => {
+      toast("Deck deleted")
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["holders"] }),
         queryClient.invalidateQueries({ queryKey: ["collection"] }),
@@ -307,6 +313,15 @@ export function Tracker({ userId }: { userId: string }) {
     },
   })
 
+
+  function toggleDeckGroup(group: string) {
+    setCollapsedGroups((current) => {
+      const next = new Set(current)
+      if (next.has(group)) next.delete(group)
+      else next.add(group)
+      return next
+    })
+  }
 
   async function logout() {
     setShowMainMenu(false)
@@ -323,7 +338,7 @@ export function Tracker({ userId }: { userId: string }) {
 
   return (
     <div className="trackerPage">
-      <header className="topbar navOnlyTopbar">
+      <header className="topbar navOnlyTopbar desktopTopbar">
         <div className="topActions">
           <div className="menuWrap" ref={collectionMenuRef}>
             <button
@@ -467,7 +482,7 @@ export function Tracker({ userId }: { userId: string }) {
 
       {selectedHolder ? (
         collectionQuery.isLoading ? (
-          <div className="emptyState">Loading {selectedHolder.name}...</div>
+          <ListSkeleton rows={5} />
         ) : selectedHolderItems.length === 0 ? (
           <div className="emptyState">
             <h2>No cards here yet</h2>
@@ -477,42 +492,54 @@ export function Tracker({ userId }: { userId: string }) {
           <div className="deckGroupedContents">
             {deckGroups.map((group) => (
               <section className="deckTypeGroup" key={group.type}>
-                <div className="deckTypeHeading">
-                  <strong>{group.type}</strong>
-                  <span>{group.count} card{group.count === 1 ? "" : "s"}</span>
-                </div>
-
-                <div className="holderContentsList deckContentsList">
-                  <div className="holderContentsHeader deckContentsHeader">
-                    <span>Card</span>
-                    <span>Qty</span>
-                    <span>Condition</span>
-                    <span>Set</span>
+                <button
+                  className="deckTypeHeading"
+                  onClick={() => toggleDeckGroup(group.type)}
+                  aria-expanded={!collapsedGroups.has(group.type)}
+                >
+                  <div>
+                    <ChevronRight
+                      size={16}
+                      className={collapsedGroups.has(group.type) ? "" : "deckGroupChevronOpen"}
+                    />
+                    <strong>{group.type}</strong>
                   </div>
+                  <span>{group.count} card{group.count === 1 ? "" : "s"}</span>
+                </button>
 
-                  {group.rows.map((item) => (
-                    <button
-                      className="holderContentsRow deckContentsRow"
-                      key={`${item.loan_role ?? "owned"}-${item.id}-${item.loan_transaction_id ?? 0}`}
-                      onClick={() => setEditing(item)}
-                    >
-                      <div className="holderCardName">
-                        {item.card.image_url ? (
-                          <img src={item.card.image_url} alt="" loading="lazy" decoding="async" />
-                        ) : (
-                          <div className="holderCardThumbPlaceholder" />
-                        )}
-                        <div>
-                          <strong>{item.card.name}</strong>
-                          <small>{item.card.type_line || "Card"}</small>
+                {!collapsedGroups.has(group.type) && (
+                  <div className="holderContentsList deckContentsList">
+                    <div className="holderContentsHeader deckContentsHeader">
+                      <span>Card</span>
+                      <span>Qty</span>
+                      <span>Condition</span>
+                      <span>Set</span>
+                    </div>
+
+                    {group.rows.map((item) => (
+                      <button
+                        className="holderContentsRow deckContentsRow"
+                        key={`${item.loan_role ?? "owned"}-${item.id}-${item.loan_transaction_id ?? 0}`}
+                        onClick={() => setEditing(item)}
+                      >
+                        <div className="holderCardName">
+                          {item.card.image_url ? (
+                            <img src={item.card.image_url} alt="" loading="lazy" decoding="async" />
+                          ) : (
+                            <div className="holderCardThumbPlaceholder" />
+                          )}
+                          <div>
+                            <strong>{item.card.name}</strong>
+                            <small>{item.card.type_line || "Card"}</small>
+                          </div>
                         </div>
-                      </div>
-                      <span>{item.quantity}</span>
-                      <span>{item.condition}{item.foil ? " · Foil" : ""}</span>
-                      <span>{item.card.set_name || item.card.set_code || "—"}</span>
-                    </button>
-                  ))}
-                </div>
+                        <span>{item.quantity}</span>
+                        <span>{item.condition}{item.foil ? " · Foil" : ""}</span>
+                        <span>{item.card.set_name || item.card.set_code || "—"}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
               </section>
             ))}
           </div>
@@ -559,7 +586,7 @@ export function Tracker({ userId }: { userId: string }) {
         )
       ) : view === "cards" ? (
         collectionQuery.isLoading ? (
-          <div className="emptyState">Loading cards...</div>
+          <CardGridSkeleton />
         ) : collectionQuery.error ? (
           <div className="emptyState errorText">{collectionQuery.error.message}</div>
         ) : shown.length === 0 ? (
@@ -607,7 +634,7 @@ export function Tracker({ userId }: { userId: string }) {
           </>
         )
       ) : holdersQuery.isLoading || collectionQuery.isLoading ? (
-        <div className="emptyState">Loading {viewLabels[view].toLowerCase()}...</div>
+        <ListSkeleton rows={5} />
       ) : holderRows.length === 0 ? (
         <div className="emptyState">
           <h2>No {viewLabels[view].toLowerCase()} found</h2>
@@ -648,11 +675,15 @@ export function Tracker({ userId }: { userId: string }) {
                     aria-label={`Delete ${holder.name}`}
                     title="Delete deck"
                     disabled={deleteDeckMutation.isPending}
-                    onClick={(event) => {
+                    onClick={async (event) => {
                       event.stopPropagation()
-                      if (window.confirm(`Delete "${holder.name}"? Its cards will be moved to My Collection.`)) {
-                        deleteDeckMutation.mutate(holder.id)
-                      }
+                      const approved = await confirm({
+                        title: `Delete ${holder.name}?`,
+                        description: "The deck will be removed, but its cards will be moved back to My Collection.",
+                        confirmLabel: "Delete deck",
+                        tone: "danger",
+                      })
+                      if (approved) deleteDeckMutation.mutate(holder.id)
                     }}
                   >
                     <Trash2 size={17} />
@@ -669,6 +700,116 @@ export function Tracker({ userId }: { userId: string }) {
           )}
         </div>
       )}
+
+
+      {/* Mobile navigation uses bottom sheets instead of squeezing the desktop hotbar. */}
+      {showCollectionMenu && (
+        <div className="mobileNavSheetBackdrop mobileOnly" onMouseDown={() => setShowCollectionMenu(false)}>
+          <section className="mobileNavSheet" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="sheetHandle" />
+            <div className="mobileSheetHeader">
+              <div>
+                <strong>Collection</strong>
+                <small>Choose what you want to manage</small>
+              </div>
+            </div>
+            <div className="mobileSheetGrid">
+              <button className={view === "cards" ? "active" : ""} onClick={() => changeView("cards")}><Library size={20} /><span>Cards</span></button>
+              <button className={view === "deck" ? "active" : ""} onClick={() => changeView("deck")}><Layers3 size={20} /><span>Decks</span></button>
+              <button className={view === "binder" ? "active" : ""} onClick={() => changeView("binder")}><Archive size={20} /><span>Binders</span></button>
+              <button className={view === "box" ? "active" : ""} onClick={() => changeView("box")}><Box size={20} /><span>Boxes</span></button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {showCommunityMenu && (
+        <div className="mobileNavSheetBackdrop mobileOnly" onMouseDown={() => setShowCommunityMenu(false)}>
+          <section className="mobileNavSheet" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="sheetHandle" />
+            <div className="mobileSheetHeader">
+              <div>
+                <strong>Community</strong>
+                <small>Friends, borrowing, lending and local contacts</small>
+              </div>
+            </div>
+            <div className="mobileActionList">
+              <button onClick={() => { setPopup("friends"); setShowCommunityMenu(false) }}><UsersRound size={19} /><div><strong>Friends</strong><small>Borrow, lend, sell and manage friends</small></div><ChevronRight size={17} /></button>
+              <button onClick={() => { setPopup("add-friend"); setShowCommunityMenu(false) }}><UserPlus size={19} /><div><strong>Add friend</strong><small>Find another Card Tracker user</small></div><ChevronRight size={17} /></button>
+              <button onClick={() => { setPopup("contact"); setShowCommunityMenu(false) }}><Plus size={19} /><div><strong>Create non-user</strong><small>Track someone who does not use the app</small></div><ChevronRight size={17} /></button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {showMainMenu && (
+        <div className="mobileNavSheetBackdrop mobileOnly" onMouseDown={() => setShowMainMenu(false)}>
+          <section className="mobileNavSheet" onMouseDown={(event) => event.stopPropagation()}>
+            <div className="sheetHandle" />
+            <div className="mobileAccountCard">
+              <small>Logged in as</small>
+              <strong>{currentUsername || "Account"}</strong>
+            </div>
+            <div className="mobileActionList">
+              <button onClick={() => { setPopup("pending"); setShowMainMenu(false) }}><Clock3 size={19} /><div><strong>Pending</strong><small>Requests waiting for a response</small></div>{pendingCount > 0 && <span className="menuCount">{pendingCount}</span>}</button>
+              <button onClick={() => { setPopup("settings"); setShowMainMenu(false) }}><Settings size={19} /><div><strong>Settings</strong><small>Account and display preferences</small></div><ChevronRight size={17} /></button>
+              <button onClick={() => { setPopup("history"); setShowMainMenu(false) }}><History size={19} /><div><strong>History</strong><small>Loans, sales and completed activity</small></div><ChevronRight size={17} /></button>
+              <button className="mobileDangerAction" onClick={logout}><LogOut size={19} /><div><strong>Log out</strong><small>Sign out of this device</small></div></button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      <nav className="mobileBottomNav mobileOnly" aria-label="Primary navigation">
+        <button
+          className={showCollectionMenu ? "active" : ""}
+          onClick={() => {
+            setShowCollectionMenu((value) => !value)
+            setShowCommunityMenu(false)
+            setShowMainMenu(false)
+          }}
+        >
+          <Library size={21} />
+          <span>Collection</span>
+        </button>
+
+        <button
+          className={showCommunityMenu ? "active" : ""}
+          onClick={() => {
+            setShowCommunityMenu((value) => !value)
+            setShowCollectionMenu(false)
+            setShowMainMenu(false)
+          }}
+        >
+          <UsersRound size={21} />
+          <span>Community</span>
+        </button>
+
+        <button className="mobileAddButton" onClick={openAddForCurrentView} aria-label={addLabel}>
+          <span><Plus size={24} /></span>
+          <small>Add</small>
+        </button>
+
+        <button onClick={() => setPopup("notifications")} className="mobileAlertButton">
+          <span className="mobileNavIcon">
+            <Bell size={21} />
+            {notificationCount > 0 && <i>{notificationCount > 9 ? "9+" : notificationCount}</i>}
+          </span>
+          <span>Alerts</span>
+        </button>
+
+        <button
+          className={showMainMenu ? "active" : ""}
+          onClick={() => {
+            setShowMainMenu((value) => !value)
+            setShowCollectionMenu(false)
+            setShowCommunityMenu(false)
+          }}
+        >
+          <Menu size={21} />
+          <span>Menu</span>
+        </button>
+      </nav>
 
       {popup === "card" && <AddCardModal holders={holders} defaultHolderId={selectedHolder?.id ?? null} onClose={() => setPopup(null)} />}
       {(popup === "deck" || popup === "binder" || popup === "box") && <HolderCreateModal type={popup} onClose={() => setPopup(null)} />}

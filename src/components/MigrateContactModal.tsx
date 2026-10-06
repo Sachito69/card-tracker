@@ -3,6 +3,7 @@ import { ArrowRight, UserRoundCheck, X } from "lucide-react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { migrateContactToUser } from "../lib/data"
 import type { Contact, Friend } from "../lib/types"
+import { useFeedback } from "./Feedback"
 
 export function MigrateContactModal({
   contact,
@@ -14,11 +15,13 @@ export function MigrateContactModal({
   onClose: () => void
 }) {
   const qc = useQueryClient()
+  const { confirm, toast } = useFeedback()
   const [targetUserId, setTargetUserId] = useState("")
 
   const migrate = useMutation({
     mutationFn: () => migrateContactToUser(contact.id, targetUserId),
     onSuccess: async () => {
+      toast(`${contact.name} migrated successfully`)
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["contacts"] }),
         qc.invalidateQueries({ queryKey: ["friends"] }),
@@ -76,10 +79,14 @@ export function MigrateContactModal({
           <button
             className="primaryButton"
             disabled={!targetUserId || migrate.isPending}
-            onClick={() => {
-              if (confirm(`Migrate all transactions from ${contact.name} to ${target?.username ?? "this user"}?`)) {
-                migrate.mutate()
-              }
+            onClick={async () => {
+              const approved = await confirm({
+                title: `Migrate ${contact.name}?`,
+                description: `All transactions will be reassigned to ${target?.username ?? "the selected user"} and the local contact will be removed.`,
+                confirmLabel: "Migrate contact",
+                tone: "danger",
+              })
+              if (approved) migrate.mutate()
             }}
           >
             <UserRoundCheck size={15} />

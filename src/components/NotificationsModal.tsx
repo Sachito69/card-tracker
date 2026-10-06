@@ -2,9 +2,12 @@ import { Check, X, XCircle } from "lucide-react"
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query"
 import { fetchNotifications, respondFriendRequest, respondLoanReturn, respondMissingBorrowRequest, respondUserTransaction } from "../lib/data"
 import type { NotificationItem } from "../lib/types"
+import { NotificationSkeleton } from "./Skeletons"
+import { useFeedback } from "./Feedback"
 
 export function NotificationsModal({ onClose }: { onClose: () => void }) {
   const qc = useQueryClient()
+  const { toast } = useFeedback()
   const query = useQuery({ queryKey: ["notifications"], queryFn: fetchNotifications, refetchInterval: 30_000 })
 
   const act = useMutation({
@@ -14,7 +17,8 @@ export function NotificationsModal({ onClose }: { onClose: () => void }) {
       if (item.kind === "missing_borrow") return respondMissingBorrowRequest(item.id, accept)
       return respondUserTransaction(item.id, accept)
     },
-    onSuccess: async () => {
+    onSuccess: async (_data, variables) => {
+      toast(variables.accept ? "Request accepted" : "Request declined")
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["notifications"] }),
         qc.invalidateQueries({ queryKey: ["friends"] }),
@@ -32,7 +36,7 @@ export function NotificationsModal({ onClose }: { onClose: () => void }) {
           <button className="iconButton" onClick={onClose}><X size={18} /></button>
         </header>
         <div className="modalBody notificationList">
-          {query.isLoading && <p className="settingsHint">Loading notifications...</p>}
+          {query.isLoading && <NotificationSkeleton rows={4} />}
           {!query.isLoading && !(query.data ?? []).length && <div className="emptyMini"><Check size={28} /><strong>All caught up</strong><small>No pending requests.</small></div>}
           {(query.data ?? []).map((item) => (
             <div className="notificationRow" key={`${item.kind}-${item.id}`}>

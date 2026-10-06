@@ -7,6 +7,8 @@ import {
   fetchLendableInventory,
 } from "../lib/data"
 import type { Contact, Friend, TransactionType } from "../lib/types"
+import { CardGridSkeleton } from "./Skeletons"
+import { useFeedback } from "./Feedback"
 
 type Recipient =
   | { kind: "friend"; value: Friend }
@@ -24,6 +26,7 @@ export function TransactionModal({
   onClose: () => void
 }) {
   const qc = useQueryClient()
+  const { toast } = useFeedback()
   const inventory = useQuery({
     queryKey: ["lendable-inventory"],
     queryFn: fetchLendableInventory,
@@ -85,6 +88,7 @@ export function TransactionModal({
       }
     },
     onSuccess: async () => {
+      toast(type === "loan" ? "Loan request sent" : "Sale request sent")
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["collection"] }),
         qc.invalidateQueries({ queryKey: ["holders"] }),
@@ -119,7 +123,7 @@ export function TransactionModal({
 
         <div className="modalBody transactionBody">
           {inventory.isLoading ? (
-            <p className="settingsHint">Loading available cards...</p>
+            <CardGridSkeleton count={6} />
           ) : !rows.length ? (
             <p className="settingsHint">No cards are currently available to {type === "loan" ? "lend" : "sell"}.</p>
           ) : (

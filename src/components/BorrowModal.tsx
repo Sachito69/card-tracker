@@ -8,11 +8,14 @@ import {
 } from "../lib/data"
 import { autocompleteCards, cardImage, searchPrintings, type ScryfallCard } from "../lib/scryfall"
 import type { Friend } from "../lib/types"
+import { CardGridSkeleton } from "./Skeletons"
+import { useFeedback } from "./Feedback"
 
 type Cart = Record<number, number>
 
 export function BorrowModal({ friend, onClose }: { friend: Friend; onClose: () => void }) {
   const qc = useQueryClient()
+  const { toast } = useFeedback()
   const [cart, setCart] = useState<Cart>({})
   const [missingQuery, setMissingQuery] = useState("")
   const [missingSuggestions, setMissingSuggestions] = useState<string[]>([])
@@ -95,6 +98,7 @@ export function BorrowModal({ friend, onClose }: { friend: Friend; onClose: () =
       }
     },
     onSuccess: async () => {
+      toast("Borrow request sent")
       await Promise.all([
         qc.invalidateQueries({ queryKey: ["pending"] }),
         qc.invalidateQueries({ queryKey: ["notifications"] }),
@@ -145,7 +149,7 @@ export function BorrowModal({ friend, onClose }: { friend: Friend; onClose: () =
 
         <div className="modalBody transactionBody">
           {inventory.isLoading ? (
-            <p className="settingsHint">Loading their available cards...</p>
+            <CardGridSkeleton count={6} />
           ) : inventory.error ? (
             <p className="errorText">{inventory.error.message}</p>
           ) : !rows.length ? (

@@ -9,9 +9,11 @@ import {
   updateCollectionItem,
 } from "../lib/data"
 import type { CollectionItem, Holder } from "../lib/types"
+import { useFeedback } from "./Feedback"
 
 export function CardEditorModal({ item, holders, onClose }: { item: CollectionItem; holders: Holder[]; onClose: () => void }) {
   const qc = useQueryClient()
+  const { confirm, toast } = useFeedback()
   const [quantity, setQuantity] = useState(item.quantity)
   const [condition, setCondition] = useState(item.condition)
   const [foil, setFoil] = useState(item.foil)
@@ -42,7 +44,7 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
 
   const save = useMutation({
     mutationFn: () => updateCollectionItem(item.id, { quantity: Math.max(isLent ? (item.lent_quantity ?? 1) : 1, quantity), condition, foil }),
-    onSuccess: async () => { await refresh(); onClose() },
+    onSuccess: async () => { toast("Card details saved"); await refresh(); onClose() },
   })
 
   const remove = useMutation({
@@ -50,22 +52,23 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
       item.holder_id !== null
         ? moveCollectionQuantity(item.id, item.quantity, null)
         : deleteCollectionItem(item.id),
-    onSuccess: async () => { await refresh(); onClose() },
+    onSuccess: async () => { toast(item.holder_id !== null ? "Card moved to My Collection" : "Card removed"); await refresh(); onClose() },
   })
 
   const move = useMutation({
     mutationFn: () => moveCollectionQuantity(item.id, Math.max(1, Math.min(moveQty, item.quantity)), moveHolderId ? Number(moveHolderId) : null),
-    onSuccess: async () => { await refresh(); onClose() },
+    onSuccess: async () => { toast("Card moved"); await refresh(); onClose() },
   })
 
   const requestReturn = useMutation({
     mutationFn: () => requestLoanReturn(item.loan_transaction_id!),
-    onSuccess: async () => { await refresh(); onClose() },
+    onSuccess: async () => { toast("Return request sent"); await refresh(); onClose() },
   })
 
   const completeLocalReturn = useMutation({
     mutationFn: (transactionId: number) => completeContactLoan(transactionId),
     onSuccess: async () => {
+      toast("Card marked as returned")
       await refresh()
     },
   })
@@ -122,10 +125,13 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
                           <button
                             className="primaryButton"
                             disabled={completeLocalReturn.isPending}
-                            onClick={() => {
-                              if (confirm(`Mark ${loan.quantity}× ${item.card.name} as returned from ${loan.recipient_name}?`)) {
-                                completeLocalReturn.mutate(loan.transaction_id)
-                              }
+                            onClick={async () => {
+                              const approved = await confirm({
+                                title: "Mark card as returned?",
+                                description: `${loan.quantity}× ${item.card.name} will be marked returned from ${loan.recipient_name}.`,
+                                confirmLabel: "Mark returned",
+                              })
+                              if (approved) completeLocalReturn.mutate(loan.transaction_id)
                             }}
                           >
                             <CornerUpLeft size={14} />
@@ -166,12 +172,17 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
                 <button
                   className={item.holder_id !== null ? "secondaryButton" : "dangerButton"}
                   disabled={isLent || remove.isPending}
-                  onClick={() => {
-                    const message =
-                      item.holder_id !== null
-                        ? `Move all ${item.card.name} copies from ${item.holder?.name ?? "this holder"} to My Collection?`
-                        : `Remove ${item.card.name} from your tracker?`
-                    if (confirm(message)) remove.mutate()
+                  onClick={async () => {
+                    const inHolder = item.holder_id !== null
+                    const approved = await confirm({
+                      title: inHolder ? "Move to My Collection?" : "Remove card?",
+                      description: inHolder
+                        ? `All ${item.card.name} copies will be moved out of ${item.holder?.name ?? "this holder"}.`
+                        : `${item.card.name} will be removed from your tracker.`,
+                      confirmLabel: inHolder ? "Move card" : "Remove card",
+                      tone: inHolder ? "default" : "danger",
+                    })
+                    if (approved) remove.mutate()
                   }}
                 >
                   {item.holder_id !== null ? <MoveRight size={15} /> : <Trash2 size={15} />}
