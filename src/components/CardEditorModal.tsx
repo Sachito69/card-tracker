@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import {
   completeContactLoan,
   deleteCollectionItem,
+  moveBorrowedLoan,
   moveCollectionQuantity,
   requestLoanReturn,
   updateCollectionItem,
@@ -19,6 +20,7 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
   const [foil, setFoil] = useState(item.foil)
   const [moveQty, setMoveQty] = useState(1)
   const [moveHolderId, setMoveHolderId] = useState("")
+  const [borrowHolderId, setBorrowHolderId] = useState(item.holder_id == null ? "" : String(item.holder_id))
 
   const isBorrowed = item.loan_role === "borrower"
   const isLent = item.loan_role === "lender" && (item.lent_quantity ?? 0) > 0
@@ -32,6 +34,10 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
     binder: holders.filter((holder) => holder.type === "binder"),
     box: holders.filter((holder) => holder.type === "box"),
   }), [holders])
+
+  const placementLabel = item.holder
+    ? `${item.holder.type[0].toUpperCase() + item.holder.type.slice(1)} - ${item.holder.name}`
+    : "Unsorted"
 
   const refresh = async () => {
     await Promise.all([
@@ -52,7 +58,7 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
       item.holder_id !== null
         ? moveCollectionQuantity(item.id, item.quantity, null)
         : deleteCollectionItem(item.id),
-    onSuccess: async () => { toast(item.holder_id !== null ? "Card moved to My Collection" : "Card removed"); await refresh(); onClose() },
+    onSuccess: async () => { toast(item.holder_id !== null ? "Card moved to Unsorted" : "Card removed"); await refresh(); onClose() },
   })
 
   const move = useMutation({
@@ -63,6 +69,19 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
   const requestReturn = useMutation({
     mutationFn: () => requestLoanReturn(item.loan_transaction_id!),
     onSuccess: async () => { toast("Return request sent"); await refresh(); onClose() },
+  })
+
+  const moveBorrowed = useMutation({
+    mutationFn: () =>
+      moveBorrowedLoan(
+        item.loan_transaction_id!,
+        borrowHolderId ? Number(borrowHolderId) : null,
+      ),
+    onSuccess: async () => {
+      toast(borrowHolderId ? "Borrowed card moved" : "Borrowed card moved to Unsorted")
+      await refresh()
+      onClose()
+    },
   })
 
   const completeLocalReturn = useMutation({
@@ -96,8 +115,35 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
               <div className="borrowedSummary">
                 <strong>{item.quantity}× {item.card.name}</strong>
                 <small>{item.condition}{item.foil ? " · Foil" : ""}</small>
+                <span className="placementTag">{placementLabel}</span>
                 <small>Status: {item.loan_status === "return_pending" ? "Return waiting for lender confirmation" : "On loan to you"}</small>
               </div>
+
+              <div className="movePanel borrowedMovePanel">
+                <strong>Placement</strong>
+                <small className="settingsHint">You can organize a borrowed card without changing who owns it.</small>
+                <label>
+                  Destination
+                  <select value={borrowHolderId} onChange={(event) => setBorrowHolderId(event.target.value)}>
+                    <option value="">Unsorted</option>
+                    <optgroup label="Decks">{holderGroups.deck.map((holder) => <option value={holder.id} key={holder.id}>{holder.name}</option>)}</optgroup>
+                    <optgroup label="Binders">{holderGroups.binder.map((holder) => <option value={holder.id} key={holder.id}>{holder.name}</option>)}</optgroup>
+                    <optgroup label="Boxes">{holderGroups.box.map((holder) => <option value={holder.id} key={holder.id}>{holder.name}</option>)}</optgroup>
+                  </select>
+                </label>
+                <button
+                  className="secondaryButton"
+                  disabled={
+                    moveBorrowed.isPending ||
+                    (borrowHolderId ? Number(borrowHolderId) : null) === item.holder_id
+                  }
+                  onClick={() => moveBorrowed.mutate()}
+                >
+                  <MoveRight size={15} /> {moveBorrowed.isPending ? "Moving..." : "Move borrowed card"}
+                </button>
+                {moveBorrowed.error && <p className="errorText">{moveBorrowed.error.message}</p>}
+              </div>
+
               <button className="primaryButton" disabled={item.loan_status === "return_pending" || requestReturn.isPending} onClick={() => requestReturn.mutate()}>
                 <CornerUpLeft size={15} /> {item.loan_status === "return_pending" ? "Return requested" : "Return card"}
               </button>
@@ -157,7 +203,7 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
                   <div className="moveGrid">
                     <label>Quantity<input type="number" min="1" max={item.quantity} value={moveQty} onChange={(event) => setMoveQty(Number(event.target.value))} /></label>
                     <label>Destination<select value={moveHolderId} onChange={(event) => setMoveHolderId(event.target.value)}>
-                      <option value="">My Collection</option>
+                      <option value="">Unsorted</option>
                       <optgroup label="Decks">{holderGroups.deck.map((holder) => <option value={holder.id} key={holder.id}>{holder.name}</option>)}</optgroup>
                       <optgroup label="Binders">{holderGroups.binder.map((holder) => <option value={holder.id} key={holder.id}>{holder.name}</option>)}</optgroup>
                       <optgroup label="Boxes">{holderGroups.box.map((holder) => <option value={holder.id} key={holder.id}>{holder.name}</option>)}</optgroup>
@@ -175,9 +221,9 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
                   onClick={async () => {
                     const inHolder = item.holder_id !== null
                     const approved = await confirm({
-                      title: inHolder ? "Move to My Collection?" : "Remove card?",
+                      title: inHolder ? "Move to Unsorted?" : "Remove card?",
                       description: inHolder
-                        ? `All ${item.card.name} copies will be moved out of ${item.holder?.name ?? "this holder"}.`
+                        ? `All ${item.card.name} copies will be moved to Unsorted from ${item.holder?.name ?? "this holder"}.`
                         : `${item.card.name} will be removed from your tracker.`,
                       confirmLabel: inHolder ? "Move card" : "Remove card",
                       tone: inHolder ? "default" : "danger",

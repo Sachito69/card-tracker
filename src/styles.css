@@ -1988,3 +1988,65 @@ button:disabled{opacity:.55;cursor:not-allowed}
     animation:none!important;
   }
 }
+
+
+/* Holder deletion + card placement tags */
+.holderDetailHeader,
+.holderDetailRow{
+  grid-template-columns:minmax(220px,2fr) 100px 100px minmax(180px,1.5fr) 70px;
+}
+
+.deckCollectionHeader,
+.deckCollectionRow{
+  grid-template-columns:minmax(240px,2fr) 110px minmax(150px,1fr) 70px;
+}
+
+.placementTag{
+  width:max-content;
+  max-width:100%;
+  display:inline-flex;
+  align-items:center;
+  min-height:22px;
+  padding:3px 7px;
+  border:1px solid #665337;
+  border-radius:999px;
+  color:#dfc56f;
+  background:#2b2319;
+  font-size:10px;
+  font-weight:750;
+  line-height:1.1;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+
+.cardInfo .placementTag{
+  margin-top:1px;
+}
+
+.borrowedSummary .placementTag{
+  margin:4px 0 2px;
+}
+
+.borrowedMovePanel{
+  margin:14px 0;
+}
+
+.borrowedMovePanel .settingsHint{
+  display:block;
+  margin:2px 0 9px;
+}
+
+@media(max-width:767px){
+  .holderDetailHeader,
+  .holderDetailRow,
+  .deckCollectionHeader,
+  .deckCollectionRow{
+    grid-template-columns:minmax(0,1fr) auto;
+  }
+
+  .placementTag{
+    max-width:100%;
+    font-size:9px;
+  }
+}

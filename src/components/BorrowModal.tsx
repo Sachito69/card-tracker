@@ -178,7 +178,7 @@ export function BorrowModal({ friend, onClose }: { friend: Friend; onClose: () =
                     </div>
                     <strong>{item.card_name}</strong>
                     <small>{item.available_quantity} available</small>
-                    <small>{item.holder_name ?? "My Collection"}</small>
+                    <small>{item.holder_name ?? "Unsorted"}</small>
                   </button>
                 )
               })}

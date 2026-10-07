@@ -146,7 +146,7 @@ export function TransactionModal({
                     </div>
                     <strong>{item.card?.name ?? "Unknown card"}</strong>
                     <small>{item.available_quantity} available</small>
-                    <small>{item.holder?.name ?? "My Collection"}</small>
+                    <small>{item.holder?.name ?? "Unsorted"}</small>
                   </button>
                 )
               })}

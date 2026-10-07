@@ -28,7 +28,7 @@ import {
   fetchHolders,
   fetchNotifications,
   fetchPendingOutgoing,
-  deleteDeck,
+  deleteHolder,
 } from "../lib/data"
 import type { CollectionItem, Holder, HolderType } from "../lib/types"
 import { AddCardModal } from "./AddCardModal"
@@ -108,6 +108,12 @@ function matchesManaValue(item: CollectionItem, value: string) {
   const cmc = Number(item.card.cmc ?? 0)
   if (value === "7+") return cmc >= 7
   return cmc === Number(value)
+}
+
+function placementLabel(item: CollectionItem) {
+  if (!item.holder) return "Unsorted"
+  const holderType = item.holder.type[0].toUpperCase() + item.holder.type.slice(1)
+  return `${holderType} - ${item.holder.name}`
 }
 
 export function Tracker({ userId }: { userId: string }) {
@@ -302,10 +308,11 @@ export function Tracker({ userId }: { userId: string }) {
     setVisible(PAGE_SIZE)
   }
 
-  const deleteDeckMutation = useMutation({
-    mutationFn: (deckId: number) => deleteDeck(deckId),
-    onSuccess: async () => {
-      toast("Deck deleted")
+  const deleteHolderMutation = useMutation({
+    mutationFn: (holder: Holder) => deleteHolder(holder.id),
+    onSuccess: async (_data, holder) => {
+      toast(`${holder.type[0].toUpperCase() + holder.type.slice(1)} deleted`)
+      if (selectedHolder?.id === holder.id) setSelectedHolder(null)
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["holders"] }),
         queryClient.invalidateQueries({ queryKey: ["collection"] }),
@@ -612,12 +619,13 @@ export function Tracker({ userId }: { userId: string }) {
                   </div>
                   <div className="cardInfo">
                     <strong>{item.card.name}</strong>
+                    <span className="placementTag">{placementLabel(item)}</span>
                     <small>
                       {item.loan_role === "borrower"
-                        ? `From ${item.loan_friend_username ?? "user"}`
+                        ? `Borrowed from ${item.loan_friend_username ?? "user"}`
                         : item.loan_role === "lender"
                           ? `Lent to ${(item.loan_recipient_names ?? [item.loan_friend_username ?? "recipient"]).join(", ")}`
-                          : item.holder?.name ?? "My Collection"}
+                          : "Owned"}
                     </small>
                     <small>{item.condition}{item.foil ? " · Foil" : ""}</small>
                   </div>
@@ -647,7 +655,7 @@ export function Tracker({ userId }: { userId: string }) {
             <span>Cards</span>
             {view !== "deck" && <span>Entries</span>}
             <span>{view === "deck" ? "Format" : "Notes"}</span>
-            {view === "deck" && <span>Options</span>}
+            <span>Options</span>
           </div>
 
           {holderRows.map(({ holder, cards, entries }) => (
@@ -668,34 +676,33 @@ export function Tracker({ userId }: { userId: string }) {
                 <span className="holderNotes">{view === "deck" ? (holder.format || "Unspecified") : (holder.notes || "—")}</span>
               </button>
 
-              {view === "deck" && (
-                <div className="deckOptionsWrap">
-                  <button
-                    className="iconButton deckDeleteButton"
-                    aria-label={`Delete ${holder.name}`}
-                    title="Delete deck"
-                    disabled={deleteDeckMutation.isPending}
-                    onClick={async (event) => {
-                      event.stopPropagation()
-                      const approved = await confirm({
-                        title: `Delete ${holder.name}?`,
-                        description: "The deck will be removed, but its cards will be moved back to My Collection.",
-                        confirmLabel: "Delete deck",
-                        tone: "danger",
-                      })
-                      if (approved) deleteDeckMutation.mutate(holder.id)
-                    }}
-                  >
-                    <Trash2 size={17} />
-                  </button>
-                </div>
-              )}
+              <div className="deckOptionsWrap">
+                <button
+                  className="iconButton deckDeleteButton"
+                  aria-label={`Delete ${holder.name}`}
+                  title={`Delete ${holder.type}`}
+                  disabled={deleteHolderMutation.isPending}
+                  onClick={async (event) => {
+                    event.stopPropagation()
+                    const label = holder.type[0].toUpperCase() + holder.type.slice(1)
+                    const approved = await confirm({
+                      title: `Delete ${holder.name}?`,
+                      description: `The ${holder.type} will be removed. Owned cards inside it will move to Unsorted, and borrowed cards placed there will also become Unsorted.`,
+                      confirmLabel: `Delete ${label.toLowerCase()}`,
+                      tone: "danger",
+                    })
+                    if (approved) deleteHolderMutation.mutate(holder)
+                  }}
+                >
+                  <Trash2 size={17} />
+                </button>
+              </div>
             </div>
           ))}
 
-          {deleteDeckMutation.error && (
+          {deleteHolderMutation.error && (
             <p className="holderListError errorText">
-              {deleteDeckMutation.error?.message}
+              {deleteHolderMutation.error?.message}
             </p>
           )}
         </div>

@@ -114,7 +114,7 @@ export async function fetchCollection(): Promise<CollectionItem[]> {
     supabase
       .from("card_transactions")
       .select(`
-        id,owner_id,recipient_user_id,source_item_id,card_id,quantity,condition,foil,status,created_at,
+        id,owner_id,recipient_user_id,source_item_id,card_id,quantity,condition,foil,status,borrower_holder_id,created_at,
         card:card_catalog(id,oracle_id,name,set_code,set_name,collector_number,image_url,type_line,colors,color_identity,cmc,legalities)
       `)
       .eq("recipient_user_id", userId)
@@ -171,6 +171,32 @@ export async function fetchCollection(): Promise<CollectionItem[]> {
     )
   }
 
+  const borrowedHolderIds = Array.from(
+    new Set(
+      incoming
+        .map((row: any) => row.borrower_holder_id)
+        .filter(Boolean)
+        .map((value: any) => Number(value)),
+    ),
+  )
+
+  let borrowedHolderMap = new Map<number, Holder>()
+  if (borrowedHolderIds.length) {
+    const { data: borrowedHolders, error } = await supabase
+      .from("holders")
+      .select("*")
+      .eq("user_id", userId)
+      .in("id", borrowedHolderIds)
+
+    if (error) throw error
+    borrowedHolderMap = new Map(
+      (borrowedHolders ?? []).map((holder: any) => [
+        Number(holder.id),
+        holder as Holder,
+      ]),
+    )
+  }
+
   const outgoingByItem = new Map<number, any[]>()
   for (const tx of outgoing as any[]) {
     if (!tx.source_item_id) continue
@@ -219,17 +245,23 @@ export async function fetchCollection(): Promise<CollectionItem[]> {
 
   const borrowed: CollectionItem[] = (incoming as any[]).map((tx) => {
     const card = Array.isArray(tx.card) ? tx.card[0] : tx.card
+    const borrowerHolderId = tx.borrower_holder_id == null
+      ? null
+      : Number(tx.borrower_holder_id)
+
     return {
       id: Number(tx.source_item_id ?? -tx.id),
-      user_id: tx.owner_id,
+      user_id: userId,
       card_id: tx.card_id,
-      holder_id: null,
+      holder_id: borrowerHolderId,
       quantity: Number(tx.quantity),
       condition: tx.condition ?? "NM",
       foil: Boolean(tx.foil),
       created_at: tx.created_at,
       card,
-      holder: null,
+      holder: borrowerHolderId
+        ? borrowedHolderMap.get(borrowerHolderId) ?? null
+        : null,
       loan_role: "borrower",
       loan_transaction_id: tx.id,
       loan_status: tx.status,
@@ -331,6 +363,14 @@ export async function moveCollectionQuantity(itemId: number, quantity: number, h
   const { error } = await supabase.rpc("move_collection_quantity", {
     p_item_id: itemId,
     p_quantity: quantity,
+    p_holder_id: holderId,
+  })
+  if (error) throw error
+}
+
+export async function moveBorrowedLoan(transactionId: number, holderId: number | null): Promise<void> {
+  const { error } = await supabase.rpc("move_borrowed_loan", {
+    p_transaction_id: transactionId,
     p_holder_id: holderId,
   })
   if (error) throw error
@@ -761,11 +801,16 @@ export async function deletePending(item: PendingItem): Promise<void> {
 }
 
 
-export async function deleteDeck(deckId: number): Promise<void> {
-  const { error } = await supabase.rpc("delete_deck_safe", {
-    p_deck_id: deckId,
+export async function deleteHolder(holderId: number): Promise<void> {
+  const { error } = await supabase.rpc("delete_holder_safe", {
+    p_holder_id: holderId,
   })
   if (error) throw error
+}
+
+// Backwards-compatible helper for older callers.
+export async function deleteDeck(deckId: number): Promise<void> {
+  await deleteHolder(deckId)
 }
 
 

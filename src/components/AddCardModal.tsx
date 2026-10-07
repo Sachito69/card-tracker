@@ -337,7 +337,7 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
           <label>
             Local holder
             <select value={holderId} onChange={(event) => setHolderId(event.target.value)}>
-              <option value="">My Collection</option>
+              <option value="">Unsorted</option>
               <optgroup label="Decks">
                 {holders.filter((holder) => holder.type === "deck").map((holder) => (
                   <option key={holder.id} value={holder.id}>{holder.name}</option>
