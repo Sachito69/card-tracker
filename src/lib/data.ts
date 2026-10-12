@@ -350,6 +350,17 @@ export async function updateCollectionItem(
   id: number,
   patch: Partial<Pick<CollectionItem, "quantity" | "condition" | "foil" | "holder_id">>,
 ): Promise<void> {
+  if (patch.quantity !== undefined || patch.foil !== undefined) {
+    const { data: loans, error: loanError } = await supabase
+      .from("card_transactions")
+      .select("id")
+      .eq("source_item_id", id)
+      .eq("transaction_type", "loan")
+      .in("status", ["active", "return_pending"])
+      .limit(1)
+    if (loanError) throw loanError
+    if (loans?.length) throw new Error("Quantity and printing are locked until all active loans are returned.")
+  }
   const { error } = await supabase.from("collection_items").update(patch).eq("id", id)
   if (error) throw error
 }
@@ -663,7 +674,7 @@ export async function fetchTransactionHistory(): Promise<TransactionHistoryItem[
   const { data, error } = await supabase
     .from("card_transactions")
     .select(`
-      id,owner_id,recipient_user_id,transaction_type,quantity,status,created_at,completed_at,
+      id,owner_id,recipient_user_id,recipient_contact_id,transaction_type,quantity,status,created_at,completed_at,
       card:card_catalog(name)
     `)
     .or(`owner_id.eq.${userId},recipient_user_id.eq.${userId}`)
@@ -672,6 +683,22 @@ export async function fetchTransactionHistory(): Promise<TransactionHistoryItem[
 
   if (error) throw error
 
+  const rows = data ?? []
+  const userIds = [...new Set(rows.flatMap((row) => [row.owner_id, row.recipient_user_id]).filter(Boolean))]
+  const contactIds = [...new Set(rows.map((row) => row.recipient_contact_id).filter(Boolean))]
+  const [profiles, contacts] = await Promise.all([
+    userIds.length
+      ? supabase.from("profiles").select("user_id,username").in("user_id", userIds)
+      : Promise.resolve({ data: [], error: null }),
+    contactIds.length
+      ? supabase.from("contacts").select("id,name").eq("user_id", userId).in("id", contactIds)
+      : Promise.resolve({ data: [], error: null }),
+  ])
+  if (profiles.error) throw profiles.error
+  if (contacts.error) throw contacts.error
+  const names = new Map((profiles.data ?? []).map((profile) => [profile.user_id, profile.username]))
+  const contactNames = new Map((contacts.data ?? []).map((contact) => [contact.id, contact.name]))
+
   return (data ?? []).map((row: any) => ({
     id: row.id,
     transaction_type: row.transaction_type,
@@ -679,6 +706,10 @@ export async function fetchTransactionHistory(): Promise<TransactionHistoryItem[
     status: row.status,
     created_at: row.created_at,
     completed_at: row.completed_at ?? null,
+    owner_name: names.get(row.owner_id) || "Deleted account",
+    recipient_name: row.recipient_contact_id
+      ? contactNames.get(row.recipient_contact_id) || "Deleted contact"
+      : names.get(row.recipient_user_id) || "Deleted account",
     card_name: Array.isArray(row.card) ? row.card[0]?.name ?? "Unknown card" : row.card?.name ?? "Unknown card",
   })) as TransactionHistoryItem[]
 }
@@ -887,3 +918,4 @@ export async function respondMissingBorrowRequest(requestId: number, accept: boo
   })
   if (error) throw error
 }
+

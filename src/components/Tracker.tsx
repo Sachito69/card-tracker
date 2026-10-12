@@ -606,28 +606,28 @@ export function Tracker({ userId }: { userId: string }) {
                   className={`cardTile ${item.loan_role === "borrower" ? "borrowedCard" : item.loan_role === "lender" ? "lentCard" : ""}`}
                   key={`${item.loan_role ?? "owned"}-${item.id}-${item.loan_transaction_id ?? 0}`}
                   onClick={() => setEditing(item)}
+                  aria-label={`${item.quantity} copies of ${item.card.name}, ${placementLabel(item)}, ${item.condition}`}
                 >
                   <div className="imageShell">
                     {item.card.image_url ? <img src={item.card.image_url} alt={item.card.name} loading="lazy" decoding="async" /> : <div className="noImage">No image</div>}
-                    <span className="qtyBadge">×{item.quantity}</span>
-                    {item.loan_role === "borrower" && <span className="loanBadge borrowed">Borrowed</span>}
-                    {item.loan_role === "lender" && (
-                      <span className="loanBadge lent">
-                        Lent to {(item.loan_recipient_names ?? [item.loan_friend_username ?? "recipient"]).join(", ")}
-                      </span>
-                    )}
                   </div>
                   <div className="cardInfo">
-                    <strong>{item.card.name}</strong>
-                    <span className="placementTag">{placementLabel(item)}</span>
-                    <small>
+                    <strong className="tileCardName" title={item.card.name}>{item.card.name}</strong>
+                    <div className="tileFacts">
+                      <span className="tileQuantity">×{item.quantity}</span>
+                      <span className="tileCondition" title="Condition and finish">{item.condition}{item.foil ? " · Foil" : ""}</span>
+                    </div>
+                    <span className="tilePlacement" title={placementLabel(item)}>{placementLabel(item)}</span>
+                    <small className={`tileOwnership ${item.loan_role ?? "owned"}`} title={
+                      item.loan_role === "borrower" ? `Borrowed from ${item.loan_friend_username ?? "Deleted account"}${item.loan_status === "return_pending" ? " · Return pending" : ""}`
+                        : item.loan_role === "lender" ? `${item.lent_quantity}× lent to ${(item.loan_recipient_names ?? [item.loan_friend_username ?? "recipient"]).join(", ")}` : "Owned by you"
+                    }>
                       {item.loan_role === "borrower"
-                        ? `Borrowed from ${item.loan_friend_username ?? "user"}`
+                        ? `${item.loan_status === "return_pending" ? "Return pending" : "Borrowed"} · ${item.loan_friend_username ?? "Deleted account"}`
                         : item.loan_role === "lender"
-                          ? `Lent to ${(item.loan_recipient_names ?? [item.loan_friend_username ?? "recipient"]).join(", ")}`
+                          ? `${item.lent_quantity}× lent · ${(item.loan_recipient_names ?? [item.loan_friend_username ?? "recipient"]).join(", ")}`
                           : "Owned"}
                     </small>
-                    <small>{item.condition}{item.foil ? " · Foil" : ""}</small>
                   </div>
                 </button>
               ))}
@@ -840,3 +840,4 @@ export function Tracker({ userId }: { userId: string }) {
     </div>
   )
 }
+

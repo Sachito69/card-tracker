@@ -133,6 +133,8 @@ export type TransactionHistoryItem = {
   created_at: string
   completed_at: string | null
   card_name: string
+  owner_name: string
+  recipient_name: string
 }
 
 export type PendingItem =
@@ -157,3 +159,4 @@ export type PendingItem =
       detail: string
       created_at: string
     }
+

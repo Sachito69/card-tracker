@@ -735,6 +735,9 @@ button:disabled{opacity:.55;cursor:not-allowed}
 }
 
 .holderRowMain{
+  background:transparent;
+  border:0;
+  padding:0;
   display:contents;
   color:inherit;
   font:inherit;
@@ -2032,6 +2035,70 @@ button:disabled{opacity:.55;cursor:not-allowed}
   margin:14px 0;
 }
 
+/* Compact facts sit below the artwork rather than covering it. */
+.tileFacts{display:flex;align-items:center;justify-content:space-between;gap:6px;min-width:0}
+.tileQuantity{font-size:14px;font-weight:800;color:var(--text)}
+.tileCondition{font-size:11px;color:var(--muted);white-space:nowrap}
+.tilePlacement{display:block;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;font-size:12px;color:#dfc56f}
+.cardInfo .tileOwnership.borrower{color:#8fc9e3}
+.cardInfo .tileOwnership.lender{color:#e4b780}
+.cardInfo .tileOwnership{font-size:11px}
+.historyParticipants{overflow-wrap:anywhere}
+.historyStatus{flex-shrink:0;text-transform:capitalize}
+.historyItem>div:first-child{min-width:0}
+
+.addCardModal{display:flex;flex-direction:column;overflow:hidden}
+.addCardModal .modalHeader,.addCardModal .modalTabs{flex:none}
+.addCardModal .modalBody{min-height:0;overflow-y:auto;overscroll-behavior:contain}
+.addCardModal .modalBody>*{flex-shrink:0}
+.addCardFooter{flex:none;padding:12px 18px;border-top:1px solid var(--border);background:var(--panel)}
+.addCardFooter .primaryButton{width:100%}
+.holderRowMain:focus-visible::before{outline:2px solid var(--accent);outline-offset:2px}
+.cardSearchInput{display:flex;align-items:center;gap:6px}
+.cardSearchInput input{min-width:0;flex:1}
+.cardSearchInput .iconButton{flex:none}
+.cardLookupPanel{margin:12px 0;border:1px solid var(--border);border-radius:10px;overflow:hidden;background:var(--bg)}
+.lookupHeading{height:42px;padding:0 12px;display:flex;align-items:center;justify-content:space-between;gap:10px;border-bottom:1px solid var(--border)}
+.lookupHeading strong{font-size:13px}
+.lookupHeading>span{font-size:12px;color:var(--muted)}
+.lookupScroll{height:330px;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable}
+.lookupMessage{height:100%;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;gap:8px;text-align:center;color:var(--muted)}
+.lookupMessage p{margin:0;font-size:13px}
+.cardSearchResults{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:10px}
+.cardSearchResult{display:flex;align-items:center;gap:10px;min-width:0;text-align:left;border:1px solid var(--border);border-radius:9px;background:var(--panel);padding:8px;cursor:pointer}
+.cardSearchResult:hover{border-color:var(--accent);background:var(--panel2)}
+.searchResultArt{width:44px;aspect-ratio:488/680;flex:none;border-radius:4px;overflow:hidden;background:#0f0c0a;display:grid;place-items:center}
+.searchResultArt img{display:block;width:100%;height:100%;object-fit:contain}
+.cardSearchResult>div:last-child{min-width:0;display:flex;flex-direction:column;gap:4px}
+.cardSearchResult strong{font-size:13px;overflow-wrap:anywhere}
+.cardSearchResult small{font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.printingGrid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;padding:10px}
+.printingOption{min-width:0;text-align:left;border:2px solid transparent;border-radius:9px;padding:5px;background:var(--panel);cursor:pointer}
+.printingOption:hover{border-color:var(--border)}
+.printingOption.selected{border-color:var(--accent);background:var(--panel2)}
+.printingArt{position:relative;aspect-ratio:488/680;border-radius:5px;overflow:hidden;display:grid;place-items:center;background:#0f0c0a}
+.printingArt img{width:100%;height:100%;object-fit:contain;display:block}
+.printingArt>span{font-size:11px;color:var(--muted)}
+.printingCheck{position:absolute;right:4px;top:4px;color:var(--accent);background:#17120f;border-radius:50%}
+.printingOption strong{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:30px;margin-top:6px;font-size:11px;line-height:15px}
+.printingOption small{display:block;margin-top:3px;font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.selectedPrintingSummary{height:36px;line-height:36px;padding:0 12px;border-top:1px solid var(--border);font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.modal input:disabled{color:var(--muted);opacity:.65}
+
+@media(max-width:767px){
+  .cardInfo .tileCardName{display:none}
+  .cardInfo{padding:7px;gap:3px}
+  .tileQuantity{font-size:13px}
+  .tilePlacement{font-size:11px}
+  .cardInfo .tileOwnership{font-size:10px}
+  .lookupScroll{height:285px}
+  .cardSearchResults{grid-template-columns:1fr}
+  .printingGrid{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;padding:8px}
+  .lookupHeading{padding:0 10px}
+  .historyItem{align-items:flex-start;gap:8px}
+  .historyStatus{max-width:46%;text-align:right}
+}
+
 .borrowedMovePanel .settingsHint{
   display:block;
   margin:2px 0 9px;
@@ -2050,3 +2117,4 @@ button:disabled{opacity:.55;cursor:not-allowed}
     font-size:9px;
   }
 }
+

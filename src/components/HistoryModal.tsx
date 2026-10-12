@@ -33,10 +33,12 @@ export function HistoryModal({ onClose }: { onClose: () => void }) {
               <div>
                 <strong>{row.card_name}</strong>
                 <small>{row.transaction_type === "loan" ? "Loan" : "Sale"} · ×{row.quantity}</small>
+                <small className="historyParticipants">{row.owner_name} → {row.recipient_name}</small>
               </div>
               <div className="historyStatus">
-                <span>{row.status}</span>
+                <span>{row.transaction_type === "loan" && row.status === "completed" ? "Returned" : row.status.replace("_", " ")}</span>
                 <small>{new Date(row.created_at).toLocaleString()}</small>
+                {row.completed_at && <small>{row.transaction_type === "loan" ? "Returned" : "Completed"} {new Date(row.completed_at).toLocaleString()}</small>}
               </div>
             </article>
           ))}
@@ -45,3 +47,4 @@ export function HistoryModal({ onClose }: { onClose: () => void }) {
     </div>
   )
 }
+

@@ -49,7 +49,9 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
   }
 
   const save = useMutation({
-    mutationFn: () => updateCollectionItem(item.id, { quantity: Math.max(isLent ? (item.lent_quantity ?? 1) : 1, quantity), condition, foil }),
+    mutationFn: () => updateCollectionItem(item.id, isLent
+      ? { condition }
+      : { quantity: Math.max(1, quantity), condition, foil }),
     onSuccess: async () => { toast("Card details saved"); await refresh(); onClose() },
   })
 
@@ -151,10 +153,11 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
           ) : (
             <>
               <div className="formGrid">
-                <label>Quantity<input type="number" min={isLent ? Math.max(1, item.lent_quantity ?? 1) : 1} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label>
+                <label>Quantity<input type="number" min={1} disabled={isLent} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label>
                 <label>Condition<select value={condition} onChange={(event) => setCondition(event.target.value as CollectionItem["condition"])}><option>NM</option><option>LP</option><option>MP</option><option>HP</option><option>DMG</option></select></label>
               </div>
-              <label className="checkRow"><input type="checkbox" checked={foil} onChange={(event) => setFoil(event.target.checked)} /> Foil</label>
+              <label className="checkRow"><input type="checkbox" checked={foil} disabled={isLent} onChange={(event) => setFoil(event.target.checked)} /> Foil</label>
+              {isLent && <p className="settingsHint">Quantity, printing, and finish are locked until all loans are returned. Condition can still be updated.</p>}
 
               {isLent ? (
                 <>
@@ -247,3 +250,4 @@ export function CardEditorModal({ item, holders, onClose }: { item: CollectionIt
     </div>
   )
 }
+

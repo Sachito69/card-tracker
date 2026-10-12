@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { CheckCircle2, LoaderCircle, Search, X, XCircle } from "lucide-react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { addCollectionItem } from "../lib/data"
-import { autocompleteCards, cardImage, searchPrintings, type ScryfallCard } from "../lib/scryfall"
+import { searchCards, cardImage, searchPrintings, type ScryfallCard } from "../lib/scryfall"
 import type { CollectionItem, Holder } from "../lib/types"
 
 type Props = {
@@ -44,10 +44,16 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
   const [mode, setMode] = useState<"single" | "bulk">("single")
 
   const [query, setQuery] = useState("")
-  const [suggestions, setSuggestions] = useState<string[]>([])
+  const [suggestions, setSuggestions] = useState<ScryfallCard[]>([])
   const [printings, setPrintings] = useState<ScryfallCard[]>([])
   const [selectedId, setSelectedId] = useState("")
   const [quantity, setQuantity] = useState(1)
+  const [chosenName, setChosenName] = useState("")
+  const [searching, setSearching] = useState(false)
+  const [loadingPrintings, setLoadingPrintings] = useState(false)
+  const [lookupError, setLookupError] = useState("")
+  const [searchAttempt, setSearchAttempt] = useState(0)
+  const printingRequest = useRef(0)
 
   const [condition, setCondition] = useState<CollectionItem["condition"]>("NM")
   const [foil, setFoil] = useState(false)
@@ -59,22 +65,38 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
   const [bulkAdding, setBulkAdding] = useState(false)
 
   useEffect(() => {
-    if (mode !== "single") return
-
+    let cancelled = false
+    if (mode !== "single" || chosenName || query.trim().length < 2) {
+      setSearching(false)
+      return
+    }
+    setSearching(true)
     const timer = window.setTimeout(async () => {
-      if (query.trim().length < 2) {
-        setSuggestions([])
-        return
-      }
       try {
-        setSuggestions((await autocompleteCards(query)).slice(0, 8))
-      } catch {
-        setSuggestions([])
+        const results = await searchCards(query)
+        if (!cancelled) setSuggestions(results)
+      } catch (error) {
+        if (!cancelled) setLookupError(error instanceof Error ? error.message : "Search failed")
+      } finally {
+        if (!cancelled) setSearching(false)
       }
-    }, 180)
+    }, 300)
 
-    return () => window.clearTimeout(timer)
-  }, [query, mode])
+    return () => { cancelled = true; window.clearTimeout(timer) }
+  }, [query, mode, chosenName, searchAttempt])
+
+  useEffect(() => () => { printingRequest.current += 1 }, [mode])
+
+  function changeQuery(value: string) {
+    printingRequest.current += 1
+    setQuery(value)
+    setChosenName("")
+    setSuggestions([])
+    setPrintings([])
+    setSelectedId("")
+    setLoadingPrintings(false)
+    setLookupError("")
+  }
 
   const selected = useMemo(
     () => printings.find((card) => card.id === selectedId) ?? null,
@@ -82,11 +104,25 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
   )
 
   async function chooseName(name: string) {
+    const request = ++printingRequest.current
     setQuery(name)
+    setChosenName(name)
     setSuggestions([])
-    const rows = await searchPrintings(name)
-    setPrintings(rows)
-    setSelectedId(rows[0]?.id ?? "")
+    setPrintings([])
+    setSelectedId("")
+    setLookupError("")
+    setLoadingPrintings(true)
+    try {
+      const rows = await searchPrintings(name)
+      if (request !== printingRequest.current) return
+      setPrintings(rows)
+      setSelectedId(rows[0]?.id ?? "")
+      if (!rows.length) setLookupError("No printings found. Try another card.")
+    } catch (error) {
+      if (request === printingRequest.current) setLookupError(error instanceof Error ? error.message : "Could not load printings")
+    } finally {
+      if (request === printingRequest.current) setLoadingPrintings(false)
+    }
   }
 
   const mutation = useMutation({
@@ -204,7 +240,11 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
 
         <div className="modalTabs">
           <button className={mode === "single" ? "active" : ""} onClick={() => setMode("single")}>Single</button>
-          <button className={mode === "bulk" ? "active" : ""} onClick={() => setMode("bulk")}>Bulk add</button>
+          <button className={mode === "bulk" ? "active" : ""} onClick={() => {
+            if (loadingPrintings) changeQuery(query)
+            printingRequest.current += 1
+            setMode("bulk")
+          }}>Bulk add</button>
         </div>
 
         <div className="modalBody">
@@ -212,56 +252,73 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
             <>
               <label>
                 Card
-                <div className="suggestWrap">
+                <div className="cardSearchInput">
                   <input
                     autoFocus
                     value={query}
-                    onChange={(event) => setQuery(event.target.value)}
+                    onChange={(event) => changeQuery(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && suggestions[0] && !searching) {
+                        event.preventDefault()
+                        void chooseName(suggestions[0].name)
+                      }
+                    }}
+                    aria-controls="card-lookup-results"
                     placeholder="Start typing a card name..."
                   />
-                  {suggestions.length > 0 && (
-                    <div className="suggestions">
-                      {suggestions.map((name) => (
-                        <button key={name} onClick={() => chooseName(name)}>{name}</button>
-                      ))}
-                    </div>
-                  )}
+                  {query && <button className="iconButton" aria-label="Clear card search" onClick={() => changeQuery("")}><X size={16} /></button>}
                 </div>
               </label>
 
-              <div className="cardLookupReservedSpace">
-                {printings.length > 0 ? (
-                  <>
-                    <label>
-                      Printing
-                      <select value={selectedId} onChange={(event) => setSelectedId(event.target.value)}>
-                        {printings.map((card) => (
-                          <option key={card.id} value={card.id}>
-                            {card.set_name} · {card.set.toUpperCase()} #{card.collector_number}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    <div className="previewCardSlot">
-                      {selected && cardImage(selected) ? (
-                        <img
-                          className="previewCard"
-                          src={cardImage(selected) ?? ""}
-                          alt={selected.name}
-                          loading="lazy"
-                          decoding="async"
-                        />
-                      ) : (
-                        <div className="previewCardPlaceholder">Card preview</div>
-                      )}
+              <div className="cardLookupPanel" id="card-lookup-results" aria-busy={searching || loadingPrintings}>
+                <div className="lookupHeading">
+                  <strong>{chosenName ? "Choose a printing" : "Search results"}</strong>
+                  <span role="status">{loadingPrintings ? "Loading printings…" : searching ? "Searching…" : chosenName ? `${printings.length} printings` : `${suggestions.length} results`}</span>
+                </div>
+                <div className="lookupScroll">
+                  {lookupError ? (
+                    <div className="lookupMessage" role="alert">
+                      <p className="errorText">{lookupError}</p>
+                      <button className="secondaryButton" onClick={() => {
+                        if (chosenName) void chooseName(chosenName)
+                        else { setLookupError(""); setSearchAttempt((attempt) => attempt + 1) }
+                      }}>Retry</button>
                     </div>
-                  </>
-                ) : (
-                  <div className="previewCardSlot emptyPreviewSlot">
-                    <div className="previewCardPlaceholder">Card preview will appear here</div>
-                  </div>
-                )}
+                  ) : searching || loadingPrintings ? (
+                    <div className="lookupMessage"><LoaderCircle className="spin" size={24} /><p>{loadingPrintings ? "Finding available editions" : "Finding cards"}</p></div>
+                  ) : chosenName ? (
+                    <div className="printingGrid" role="group" aria-label="Available printings">
+                      {printings.map((card) => (
+                        <button
+                          className={selectedId === card.id ? "printingOption selected" : "printingOption"}
+                          key={card.id}
+                          aria-pressed={selectedId === card.id}
+                          aria-label={`${card.name}, ${card.set_name}, #${card.collector_number}`}
+                          onClick={() => setSelectedId(card.id)}
+                        >
+                          <div className="printingArt">
+                            {cardImage(card) ? <img src={cardImage(card)!} alt={card.name} loading="lazy" decoding="async" /> : <span>No artwork</span>}
+                            {selectedId === card.id && <CheckCircle2 className="printingCheck" size={20} />}
+                          </div>
+                          <strong title={card.set_name}>{card.set_name}</strong>
+                          <small>{card.set.toUpperCase()} · #{card.collector_number}</small>
+                        </button>
+                      ))}
+                    </div>
+                  ) : suggestions.length ? (
+                    <div className="cardSearchResults">
+                      {suggestions.map((card) => (
+                        <button className="cardSearchResult" key={card.id} onClick={() => void chooseName(card.name)}>
+                          <div className="searchResultArt">{cardImage(card) ? <img src={cardImage(card)!} alt="" loading="lazy" /> : <span>?</span>}</div>
+                          <div><strong>{card.name}</strong><small>{card.type_line}</small></div>
+                        </button>
+                      ))}
+                    </div>
+                  ) : <div className="lookupMessage"><Search size={24} /><p>{query.trim().length >= 2 ? "No cards found. Try another name." : "Type at least two letters to see card artwork."}</p></div>}
+                </div>
+                <div className="selectedPrintingSummary" title={selected ? `${selected.name} · ${selected.set_name} #${selected.collector_number}` : undefined}>
+                  {selected ? `${selected.name} · ${selected.set_name} #${selected.collector_number}` : "Select a card, then its edition. The newest edition is selected for you."}
+                </div>
               </div>
 
               <div className="formGrid">
@@ -362,17 +419,18 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
           </label>
 
           {mode === "single" && mutation.error && <p className="errorText">{mutation.error.message}</p>}
-
-          {mode === "single" && (
+        </div>
+        {mode === "single" && (
+          <footer className="addCardFooter">
             <button
               className="primaryButton"
-              disabled={!selected || mutation.isPending}
+              disabled={!selected || loadingPrintings || mutation.isPending}
               onClick={() => mutation.mutate()}
             >
               {mutation.isPending ? "Adding..." : "Add card"}
             </button>
-          )}
-        </div>
+          </footer>
+        )}
       </section>
     </div>
   )
@@ -398,3 +456,4 @@ function ConditionSelect({
     </label>
   )
 }
+
