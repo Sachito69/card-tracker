@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import { CheckCircle2, LoaderCircle, Search, X, XCircle } from "lucide-react"
 import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { addCollectionItem } from "../lib/data"
+import {parseBulkInput,selectBulkPrinting,retainAddedBulkRows,type BulkInput} from "../lib/bulkImport"
 import { searchCards, cardImage, searchPrintings, type ScryfallCard } from "../lib/scryfall"
 import type { CollectionItem, Holder } from "../lib/types"
 import { useFeedback } from "./Feedback"
@@ -9,10 +10,12 @@ import { useFeedback } from "./Feedback"
 type Props = {
   holders: Holder[]
   defaultHolderId?: number | null
+  defaultMissing?: boolean
   onClose: () => void
 }
 
 type BulkRow = {
+  input: BulkInput | null
   id: number
   raw: string
   name: string
@@ -22,29 +25,21 @@ type BulkRow = {
   message?: string
 }
 
-function parseBulkLines(text: string): BulkRow[] {
-  return text
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((raw, index) => {
-      const match = raw.match(/^\s*(\d+)\s*[xX]?\s+(.+?)\s*$/)
-      return {
-        id: index,
-        raw,
-        quantity: match ? Math.max(1, Number(match[1])) : 1,
-        name: match ? match[2].trim() : raw,
-        status: "waiting" as const,
-        card: null,
-      }
-    })
+function parseBulkLines(text:string):BulkRow[] {
+ return text.split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map((raw,id)=>{
+  const {input,error}=parseBulkInput(raw)
+  return {id,raw,input,name:input?.name??raw,quantity:input?.quantity??0,status:error?"error":"waiting",card:null,message:error??undefined}
+ })
 }
 
-export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props) {
+export function AddCardModal({ holders, defaultHolderId = null, defaultMissing = false, onClose }: Props) {
   const queryClient = useQueryClient()
   const {toast}=useFeedback()
   const inputRef=useRef<HTMLInputElement>(null)
   const submitting=useRef(false)
+  const bulkRequest=useRef(0)
+  const bulkSubmitting=useRef(false)
+  const addedBulkRows=useRef<BulkRow[]>([])
   const [mode, setMode] = useState<"single" | "bulk">("single")
 
   const [query, setQuery] = useState("")
@@ -90,7 +85,7 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
     return () => { cancelled = true; window.clearTimeout(timer) }
   }, [query, mode, chosenName, searchAttempt])
 
-  useEffect(() => () => { printingRequest.current += 1 }, [mode])
+  useEffect(() => () => { printingRequest.current += 1;bulkRequest.current+=1 }, [mode])
 
   function changeQuery(value: string) {
     printingRequest.current += 1
@@ -144,6 +139,7 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
         condition,
         foil,
         holder_id: holderId ? Number(holderId) : null,
+        is_missing: defaultMissing,
       })
     },
     onSuccess: async (_data,keepOpen) => {
@@ -160,104 +156,64 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
   }
 
   async function searchBulk() {
-    const parsed = parseBulkLines(bulkText)
-    setBulkRows(parsed)
-    if (!parsed.length) return
-
-    setBulkSearching(true)
-    const working = [...parsed]
-
-    for (let index = 0; index < working.length; index += 1) {
-      working[index] = { ...working[index], status: "searching", message: undefined }
+    if(bulkSubmitting.current)return
+    const generation=++bulkRequest.current
+    const working=retainAddedBulkRows(parseBulkLines(bulkText),addedBulkRows.current)
+    setBulkRows(working);setBulkSearching(true)
+    for(let index=0;index<working.length;index++){
+      if(generation!==bulkRequest.current)return
+      if(!working[index].input||working[index].status==="added")continue
+      working[index]={...working[index],status:"searching",message:undefined};setBulkRows([...working])
+      try{
+        const input=working[index].input!
+        const card=selectBulkPrinting(input,await searchPrintings(input.name))
+        working[index]={...working[index],status:"found",card,message:`${card.set_name} (${card.set.toUpperCase()}) #${card.collector_number}${input.foil?" · Foil":""}`}
+      }catch(error){working[index]={...working[index],status:"error",message:error instanceof Error?error.message:"Search failed"}}
+      if(generation!==bulkRequest.current)return
       setBulkRows([...working])
-
-      try {
-        const printings = await searchPrintings(working[index].name)
-        if (!printings.length) {
-          working[index] = {
-            ...working[index],
-            status: "error",
-            message: "No printing found",
-          }
-        } else {
-          working[index] = {
-            ...working[index],
-            status: "found",
-            card: printings[0],
-            message: `${printings[0].set_name} #${printings[0].collector_number}`,
-          }
-        }
-      } catch (error) {
-        working[index] = {
-          ...working[index],
-          status: "error",
-          message: error instanceof Error ? error.message : "Search failed",
-        }
-      }
-
-      setBulkRows([...working])
-
-      // A short gap keeps bulk searches polite to Scryfall while the UI stays responsive.
-      if (index < working.length - 1) {
-        await new Promise((resolve) => window.setTimeout(resolve, 90))
-      }
+      if(index<working.length-1)await new Promise(resolve=>window.setTimeout(resolve,90))
     }
-
-    setBulkSearching(false)
+    if(generation===bulkRequest.current)setBulkSearching(false)
   }
 
   async function addBulkFound() {
-    const found = bulkRows.filter((row) => row.status === "found" && row.card)
-    if (!found.length) return
-
-    setBulkAdding(true)
-    const working = [...bulkRows]
-
-    for (const row of found) {
-      const index = working.findIndex((candidate) => candidate.id === row.id)
-      if (index < 0 || !row.card) continue
-
-      try {
-        await addCollectionItem({
-          card: row.card,
-          quantity: row.quantity,
-          condition,
-          foil,
-          holder_id: holderId ? Number(holderId) : null,
-        })
-        working[index] = { ...working[index], status: "added", message: "Added" }
-      } catch (error) {
-        working[index] = {
-          ...working[index],
-          status: "error",
-          message: error instanceof Error ? error.message : "Add failed",
-        }
+    if(bulkSubmitting.current||bulkSearching)return
+    const found=bulkRows.filter(row=>(row.status==="found"||row.status==="error")&&row.card&&row.input)
+    if(!found.length)return
+    bulkSubmitting.current=true;setBulkAdding(true)
+    const working=[...bulkRows]
+    try{
+      for(const row of found){
+        const index=working.findIndex(candidate=>candidate.id===row.id)
+        try{
+          await addCollectionItem({card:row.card!,quantity:row.quantity,condition,foil:row.input!.foil,holder_id:holderId?Number(holderId):null,is_missing:defaultMissing})
+          working[index]={...working[index],status:"added",message:"Added"}
+          addedBulkRows.current.push(working[index])
+        }catch(error){working[index]={...working[index],status:"error",message:error instanceof Error?error.message:"Add failed"}}
+        setBulkRows([...working])
       }
-      setBulkRows([...working])
-    }
-
-    await queryClient.invalidateQueries({ queryKey: ["collection"] })
-    setBulkAdding(false)
+      await Promise.all(["collection","holders","lendable-inventory"].map(key=>queryClient.invalidateQueries({queryKey:[key]})))
+    }finally{bulkSubmitting.current=false;setBulkAdding(false)}
   }
 
   const bulkDone = bulkRows.filter((row) => row.status === "found" || row.status === "error" || row.status === "added").length
   const bulkProgress = bulkRows.length ? Math.round((bulkDone / bulkRows.length) * 100) : 0
-  const foundCount = bulkRows.filter((row) => row.status === "found").length
+  const foundCount = bulkRows.filter((row) => (row.status === "found"||row.status === "error")&&row.card).length
 
   return (
-    <div className="modalBackdrop" onMouseDown={()=>{if(!submitting.current)onClose()}}>
+    <div className="modalBackdrop" onMouseDown={()=>{if(!submitting.current&&!bulkSubmitting.current){bulkRequest.current+=1;onClose()}}}>
       <section className="modal addCardModal" onMouseDown={(event) => event.stopPropagation()}>
         <header className="modalHeader">
           <div>
-            <h2>Add card</h2>
-            <p>Add one card or search a whole list.</p>
+            <h2>{defaultMissing?"Add missing card":"Add card"}</h2>
+            <p>{defaultMissing?"Plan the cards you still need. Mark them acquired when you get them.":"Add one card or search a whole list."}</p>
           </div>
-          <button className="iconButton" disabled={mutation.isPending} aria-label="Close Add Card" onClick={()=>{if(!submitting.current)onClose()}}><X size={18} /></button>
+          <button className="iconButton" disabled={mutation.isPending||bulkAdding} aria-label="Close Add Card" onClick={()=>{if(!submitting.current&&!bulkSubmitting.current){bulkRequest.current+=1;onClose()}}}><X size={18} /></button>
         </header>
 
         <div className="modalTabs">
-          <button disabled={mutation.isPending} className={mode === "single" ? "active" : ""} onClick={() => setMode("single")}>Single</button>
-          <button disabled={mutation.isPending} className={mode === "bulk" ? "active" : ""} onClick={() => {
+          <button disabled={mutation.isPending||bulkAdding} className={mode === "single" ? "active" : ""} onClick={() => {bulkRequest.current+=1;setBulkSearching(false);setMode("single")}}>Single</button>
+          <button disabled={mutation.isPending||bulkAdding} className={mode === "bulk" ? "active" : ""} onClick={() => {
             if (loadingPrintings) changeQuery(query)
             printingRequest.current += 1
             setMode("bulk")
@@ -265,7 +221,7 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
         </div>
 
         <div className="modalBody">
-          <fieldset className="addCardFields" disabled={mutation.isPending}>
+          <fieldset className="addCardFields" disabled={mutation.isPending||bulkAdding}>
           {mode === "single" ? (
             <>
               <label>
@@ -363,11 +319,12 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
                 <textarea
                   className="bulkTextarea"
                   value={bulkText}
-                  onChange={(event) => setBulkText(event.target.value)}
-                  placeholder={"4 Lightning Bolt\n1 Sol Ring\n2 Counterspell"}
+                  disabled={bulkAdding}
+                  onChange={(event) => {bulkRequest.current+=1;setBulkSearching(false);setBulkRows(rows=>rows.filter(row=>row.status==="added"));setBulkText(event.target.value)}}
+                  placeholder={"1 Consecrated Sphinx (PF26) 4 *F*\n4 Lightning Bolt\n1 Sol Ring"}
                 />
               </label>
-              <p className="settingsHint">Use one card per line. Quantity is optional; examples: “4 Lightning Bolt” or “1x Sol Ring”. The newest printing found is selected automatically.</p>
+              <p className="settingsHint">Quantity and name are required. Optional: (SET), collector number and *F* for foil. Review the selected printing before adding.</p>
 
               <div className="bulkActions">
                 <button className="secondaryButton" disabled={bulkSearching || bulkAdding || !bulkText.trim()} onClick={searchBulk}>

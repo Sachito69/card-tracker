@@ -6,12 +6,13 @@ import type { CollectionItem,Holder } from "../lib/types"
 import { useFeedback } from "./Feedback"
 import { ModalFrame } from "./ModalFrame"
 import { MoveCardModal } from "./MoveCardModal"
+import { AcquireCardModal } from "./AcquireCardModal"
 import { LendCardModal } from "./LendCardModal"
 
 export function CardEditorModal({item,holders,items=[],onClose,panel=false}:{item:CollectionItem;holders:Holder[];items?:CollectionItem[];onClose:()=>void;panel?:boolean}) {
   const qc=useQueryClient(),{toast,confirm}=useFeedback()
   const [quantity,setQuantity]=useState(item.quantity),[condition,setCondition]=useState(item.condition),[foil,setFoil]=useState(item.foil)
-  const [action,setAction]=useState<"move"|"lend"|null>(null)
+  const [action,setAction]=useState<"move"|"lend"|"acquire"|null>(null)
   const borrowed=item.loan_role==="borrower",lent=(item.lent_quantity??0)>0
   const reserved=item.reserved_quantity??item.lent_quantity??0
   const placement=item.holder?`${item.holder.type} - ${item.holder.name}`:"Unsorted"
@@ -20,12 +21,13 @@ export function CardEditorModal({item,holders,items=[],onClose,panel=false}:{ite
   const remove=useMutation({mutationFn:()=>item.holder_id!==null?moveCollectionQuantity(item.id,item.quantity,null):deleteCollectionItem(item.id),onSuccess:async()=>{await refresh();toast(item.holder_id!==null?"Card moved to Unsorted":"Card removed");onClose()}})
   const requestReturn=useMutation({mutationFn:()=>requestLoanReturn(item.loan_transaction_id!),onSuccess:async()=>{await refresh();toast("Return request sent");onClose()}})
   const contactReturn=useMutation({mutationFn:(id:number)=>completeContactLoan(id),onSuccess:async()=>{await refresh();toast("Card marked returned");onClose()}})
+  if(action==="acquire")return <AcquireCardModal item={items.find(row=>row.id===item.id&&row.is_missing)??item} available={items.some(row=>row.id===item.id&&row.is_missing)} onClose={()=>setAction(null)} onDone={onClose}/>
   if(action==="move")return <MoveCardModal item={item} holders={holders} items={items} onClose={()=>setAction(null)} onDone={onClose}/>
   if(action==="lend")return <LendCardModal item={item} onClose={()=>setAction(null)} onDone={onClose}/>
   const body=<>
-    <div className="editorSummary">{item.card.image_url&&<img src={item.card.image_url} alt={item.card.name}/>}<div><strong>{item.quantity}× {item.card.name}</strong><small>{item.card.set_name} #{item.card.collector_number}</small><span className="placementTag">{placement}</span><small>{borrowed?`Borrowed from ${item.loan_friend_username??"Unnamed account"}`:lent?`${item.lent_quantity}× lent`:"Owned by you"}</small></div></div>
+    <div className="editorSummary">{item.card.image_url&&<img src={item.card.image_url} alt={item.card.name}/>}<div><strong>{item.quantity}× {item.card.name}</strong><small>{item.card.set_name} #{item.card.collector_number}</small><span className="placementTag">{placement}</span><small>{borrowed?`Borrowed from ${item.loan_friend_username??"Unnamed account"}`:lent?`${item.lent_quantity}× lent`:item.is_missing?"Missing":"Owned by you"}</small></div></div>
     <div className="uxActionRow"><button className="secondaryButton" disabled={!borrowed&&reserved>0} onClick={()=>setAction("move")}>Move</button>
-      {borrowed?<button className="primaryButton" disabled={item.loan_status==="return_pending"||requestReturn.isPending} onClick={()=>requestReturn.mutate()}>{item.loan_status==="return_pending"?"Waiting for confirmation":requestReturn.isPending?"Requesting…":"Request return"}</button>:<button className="secondaryButton" disabled={item.quantity-reserved<1} onClick={()=>setAction("lend")}>Lend</button>}
+      {item.is_missing?<button className="primaryButton" onClick={()=>setAction("acquire")}>Mark acquired</button>:borrowed?<button className="primaryButton" disabled={item.loan_status==="return_pending"||requestReturn.isPending} onClick={()=>requestReturn.mutate()}>{item.loan_status==="return_pending"?"Waiting for confirmation":requestReturn.isPending?"Requesting…":"Request return"}</button>:<button className="secondaryButton" disabled={item.quantity-reserved<1} onClick={()=>setAction("lend")}>Lend</button>}
     </div>
     {!borrowed&&reserved>0&&<p className="settingsHint">Move is unavailable while this stack has pending or active transactions.</p>}
     {borrowed?<p className="settingsHint">{item.condition}{item.foil?" · Foil":""}. Quantity and printing stay with the lender.</p>:<>

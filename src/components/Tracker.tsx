@@ -37,13 +37,11 @@ import { CardEditorModal } from "./CardEditorModal"
 import { CreateContactModal } from "./CreateContactModal"
 import { FilterModal, type TrackerFilters } from "./FilterModal"
 import { loadPreferences,savePreferences,type TrackerPreferences,type Ownership } from "../lib/preferences"
-import { fetchDecklist } from "../lib/decklistData"
-import { DeckProgress } from "./DeckProgress"
-import { DecklistEditorModal } from "./DecklistEditorModal"
-import { FillDeckModal } from "./FillDeckModal"
+import { CardTextRow } from "./CardTextRow"
+import { AcquireCardModal } from "./AcquireCardModal"
+import { InventoryDeckProgress } from "./InventoryDeckProgress"
+import { collectionItemKey,isOwnedInventory } from "../lib/inventory"
 import { HolderCardGrid } from "./HolderCardGrid"
-import type { DecklistEntry } from "../lib/types"
-import { cardIdentity } from "../lib/decklist"
 import { FriendsListModal } from "./FriendsListModal"
 import { HolderCreateModal } from "./HolderCreateModal"
 import { HistoryModal } from "./HistoryModal"
@@ -55,21 +53,21 @@ import { useFeedback } from "./Feedback"
 
 const PAGE_SIZE = 120
 
-type CollectionView = "cards" | HolderType
-type Popup = null | "card" | "settings" | "history" | "notifications" | "pending" | "filter" | "add-friend" | "friends" | "contact" | HolderType
+type CollectionView = "cards" | "deck" | "containers" | "wishlist"
+type Popup = null | "card" | "settings" | "history" | "notifications" | "pending" | "filter" | "add-friend" | "friends" | "contact" | "deck" | "container"
 
 const viewLabels: Record<CollectionView, string> = {
   cards: "Cards",
   deck: "Decks",
-  binder: "Binders",
-  box: "Boxes",
+  containers: "Containers",
+  wishlist: "Wishlist",
 }
 
 const singularLabels: Record<CollectionView, string> = {
   cards: "Card",
   deck: "Deck",
-  binder: "Binder",
-  box: "Box",
+  containers: "Container",
+  wishlist: "Card",
 }
 
 function matchesColors(item: CollectionItem, selected: string[]) {
@@ -118,12 +116,6 @@ function matchesManaValue(item: CollectionItem, value: string) {
   return cmc === Number(value)
 }
 
-function placementLabel(item: CollectionItem) {
-  if (!item.holder) return "Unsorted"
-  const holderType = item.holder.type[0].toUpperCase() + item.holder.type.slice(1)
-  return `${holderType} - ${item.holder.name}`
-}
-
 export function Tracker({ userId }: { userId: string }) {
   const queryClient = useQueryClient()
   const { confirm, toast } = useFeedback()
@@ -148,16 +140,14 @@ export function Tracker({ userId }: { userId: string }) {
   const setFilters=(value:TrackerFilters)=>updatePreferences({filters:value})
   const [desktopPanel,setDesktopPanel]=useState(()=>loadPreferences(userId,"display").desktopPanel)
   const [desktop,setDesktop]=useState(()=>window.matchMedia("(min-width:1024px)").matches)
-  const [decklistEditor,setDecklistEditor]=useState(false)
-  const [fillEntry,setFillEntry]=useState<DecklistEntry|null>(null)
-  const decklistQuery=useQuery({queryKey:["decklist",userId,selectedHolder?.id],queryFn:()=>fetchDecklist(selectedHolder!.id),enabled:selectedHolder?.type==="deck"})
+  const [acquiring,setAcquiring]=useState<CollectionItem|null>(null)
   useEffect(()=>{setDesktopPanel(loadPreferences(userId,"display").desktopPanel)},[userId])
   useEffect(()=>{
     const media=window.matchMedia("(min-width:1024px)"),change=()=>setDesktop(media.matches)
     media.addEventListener("change",change);return()=>media.removeEventListener("change",change)
   },[])
   const matchesOwnership=(item:CollectionItem)=>preferences.ownership==="all"||
-    (preferences.ownership==="owned"&&item.loan_role!=="borrower")||
+    (preferences.ownership==="owned"&&isOwnedInventory(item))||
     (preferences.ownership==="borrowed"&&item.loan_role==="borrower")||
     (preferences.ownership==="lent"&&(item.lent_quantity??0)>0)||
     (preferences.ownership==="unsorted"&&item.holder_id===null)
@@ -199,11 +189,12 @@ export function Tracker({ userId }: { userId: string }) {
   )
 
   const filtered = useMemo(() => {
-    const q = view === "cards" ? search.trim().toLowerCase() : ""
+    const q = search.trim().toLowerCase()
 
     return items.filter((item) => {
+      if(view==="wishlist"?!item.is_missing:item.is_missing)return false
       if (!matchesOwnership(item)||(q && !item.card.name.toLowerCase().includes(q))) return false
-      if (view !== "cards") return true
+      if (view !== "cards"&&view!=="wishlist") return true
       if (!matchesColors(item, filters.colors)) return false
       if (!matchesCommander(item, filters.commanderColors)) return false
       if (filters.cardType && primaryType(item.card.type_line) !== filters.cardType) return false
@@ -213,12 +204,12 @@ export function Tracker({ userId }: { userId: string }) {
   }, [items, search, filters, view,preferences.ownership,preferences.sort])
 
   const holderRows = useMemo(() => {
-    if (view === "cards") return []
+    if (view === "cards"||view==="wishlist") return []
 
     const q = search.trim().toLowerCase()
 
     return holders
-      .filter((holder) => holder.type === view)
+      .filter((holder) => view==="containers"?holder.type!=="deck":holder.type===view)
       .filter((holder) => !q || holder.name.toLowerCase().includes(q))
       .filter((holder) => {
         if (view !== "deck" || !filters.deckFormat) return true
@@ -230,7 +221,7 @@ export function Tracker({ userId }: { userId: string }) {
         return {
           holder,
           entries: holderItems.length,
-          cards: holderItems.reduce((sum, item) => sum + Number(item.quantity || 0), 0),
+          cards: holderItems.filter(item=>!item.is_missing).reduce((sum, item) => sum + Math.max(0,item.quantity-(item.lent_quantity??0)), 0),
         }
       })
       .sort((a, b) => a.holder.name.localeCompare(b.holder.name))
@@ -306,7 +297,7 @@ export function Tracker({ userId }: { userId: string }) {
 
   const totalCards = useMemo(() => filtered.reduce((sum, item) => sum + item.quantity, 0), [filtered])
   const shown = filtered.slice(0, visible)
-  const filterContext = (selectedHolder ? "cards" : view) as "cards" | HolderType
+  const filterContext: "cards"|HolderType = selectedHolder||view==="wishlist"?"cards":view==="containers"?"binder":view
   const activeFilterCount =
     filterContext === "cards"
       ? filters.colors.length +
@@ -329,7 +320,7 @@ export function Tracker({ userId }: { userId: string }) {
       setPopup("card")
       return
     }
-    setPopup(view === "cards" ? "card" : view)
+    setPopup(view === "cards"||view==="wishlist" ? "card" : view==="containers"?"container":"deck")
   }
 
   function openHolder(holder: Holder) {
@@ -405,11 +396,11 @@ export function Tracker({ userId }: { userId: string }) {
                 <button className={view === "deck" ? "selectedDropdownItem" : ""} onClick={() => changeView("deck")}>
                   <Layers3 size={15} /> Decks
                 </button>
-                <button className={view === "binder" ? "selectedDropdownItem" : ""} onClick={() => changeView("binder")}>
-                  <Archive size={15} /> Binders
+                <button className={view === "containers" ? "selectedDropdownItem" : ""} onClick={() => changeView("containers")}>
+                  <Archive size={15} /> Containers
                 </button>
-                <button className={view === "box" ? "selectedDropdownItem" : ""} onClick={() => changeView("box")}>
-                  <Box size={15} /> Boxes
+                <button className={view === "wishlist" ? "selectedDropdownItem" : ""} onClick={() => changeView("wishlist")}>
+                  <Box size={15} /> Wishlist
                 </button>
               </div>
             )}
@@ -491,7 +482,7 @@ export function Tracker({ userId }: { userId: string }) {
         <section className="collectionHeading">
           <div>
             <h1>{viewLabels[view]}</h1>
-            {view === "cards" ? (
+            {view === "cards"||view==="wishlist" ? (
               <p>{totalCards.toLocaleString()} cards · {filtered.length.toLocaleString()} entries</p>
             ) : (
               <p>{holderRows.length.toLocaleString()} {viewLabels[view].toLowerCase()}</p>
@@ -523,23 +514,14 @@ export function Tracker({ userId }: { userId: string }) {
         </button>
       </section>
 
-      {(view==="cards"||selectedHolder)&&<section className="uxBrowseControls">
+      {(view==="cards"||view==="wishlist"||selectedHolder)&&<section className="uxBrowseControls">
         <div className="ownershipChips" role="group" aria-label="Ownership filters">
           {(["all","owned","borrowed","lent","unsorted"] as Ownership[]).map(value=><button key={value} className={preferences.ownership===value?"active":""} aria-pressed={preferences.ownership===value} onClick={()=>{updatePreferences({ownership:value});setVisible(PAGE_SIZE)}}>{value[0].toUpperCase()+value.slice(1)}</button>)}
         </div>
         <div className="uxViewControls"><label>View<select aria-label="Collection view" value={preferences.view} onChange={e=>updatePreferences({view:e.target.value as TrackerPreferences["view"]})}><option value="images">Images</option><option value="text">Text</option></select></label>
           <label>Sort<select aria-label="Sort cards" value={preferences.sort} onChange={e=>updatePreferences({sort:e.target.value as TrackerPreferences["sort"]})}><option value="name">Name</option><option value="newest">Newest added</option><option value="quantity">Quantity</option></select></label></div>
       </section>}
-      {selectedHolder?.type==="deck"&&<>
-        {decklistQuery.isLoading?<p className="deckProgress">Loading saved decklist…</p>:decklistQuery.error?<p className="deckProgress errorText">{decklistQuery.error.message}</p>:
-          <DeckProgress deck={selectedHolder} entries={decklistQuery.data??[]} items={items} onEdit={()=>setDecklistEditor(true)} onFill={setFillEntry} search={search}
-            matchesEntry={entry=>{
-              const target={card:entry.card} as CollectionItem
-              return matchesColors(target,filters.colors)&&matchesCommander(target,filters.commanderColors)&&
-                (!filters.cardType||primaryType(entry.card.type_line)===filters.cardType)&&matchesManaValue(target,filters.manaValue)&&
-                (preferences.ownership==="all"||items.some(item=>item.holder_id===selectedHolder.id&&cardIdentity(item.card)===entry.identity_key&&matchesOwnership(item)))
-            }}/>}
-      </>}
+      {selectedHolder?.type==="deck"&&<InventoryDeckProgress items={items} holderId={selectedHolder.id}/>}
       {selectedHolder ? (
         collectionQuery.isLoading ? (
           <ListSkeleton rows={5} />
@@ -548,7 +530,7 @@ export function Tracker({ userId }: { userId: string }) {
             <h2>No cards here yet</h2>
             <p>Add a card to {selectedHolder.name} or change your filters.</p>
           </div>
-        ) : preferences.view==="images" ? <HolderCardGrid items={selectedHolderItems} onSelect={setEditing}/> : selectedHolder.type === "deck" ? (
+        ) : preferences.view==="images" ? <HolderCardGrid items={selectedHolderItems} onSelect={setEditing} onAcquire={setAcquiring}/> : selectedHolder.type === "deck" ? (
           <div className="deckGroupedContents">
             {deckGroups.map((group) => (
               <section className="deckTypeGroup" key={group.type}>
@@ -569,82 +551,17 @@ export function Tracker({ userId }: { userId: string }) {
 
                 {!collapsedGroups.has(group.type) && (
                   <div className="holderContentsList deckContentsList">
-                    <div className="holderContentsHeader deckContentsHeader">
-                      <span>Card</span>
-                      <span>Qty</span>
-                      <span>Condition</span>
-                      <span>Set</span>
-                    </div>
 
-                    {group.rows.map((item) => (
-                      <button
-                        className="holderContentsRow deckContentsRow"
-                        key={`${item.loan_role ?? "owned"}-${item.id}-${item.loan_transaction_id ?? 0}`}
-                        onClick={() => setEditing(item)}
-                      >
-                        <div className="holderCardName">
-                          {item.card.image_url ? (
-                            <img src={item.card.image_url} alt="" loading="lazy" decoding="async" />
-                          ) : (
-                            <div className="holderCardThumbPlaceholder" />
-                          )}
-                          <div>
-                            <strong>{item.card.name}</strong>
-                            <small>{item.card.type_line || "Card"}</small>
-                          </div>
-                        </div>
-                        <span>{item.quantity}</span>
-                        <span>{item.condition}{item.foil ? " · Foil" : ""}</span>
-                        <span>{item.card.set_name || item.card.set_code || "—"}</span>
-                      </button>
-                    ))}
+                    {group.rows.map(item=><CardTextRow key={collectionItemKey(item)} item={item} onSelect={setEditing} onAcquire={setAcquiring}/>)}
                   </div>
                 )}
               </section>
             ))}
           </div>
         ) : (
-          <div className="holderContentsList">
-            <div className="holderContentsHeader">
-              <span>Card</span>
-              <span>Qty</span>
-              <span>Condition</span>
-              <span>Set</span>
-              <span>Status</span>
-            </div>
-
-            {selectedHolderItems.map((item) => (
-              <button
-                className="holderContentsRow"
-                key={`${item.loan_role ?? "owned"}-${item.id}-${item.loan_transaction_id ?? 0}`}
-                onClick={() => setEditing(item)}
-              >
-                <div className="holderCardName">
-                  {item.card.image_url ? (
-                    <img src={item.card.image_url} alt="" loading="lazy" decoding="async" />
-                  ) : (
-                    <div className="holderCardThumbPlaceholder" />
-                  )}
-                  <div>
-                    <strong>{item.card.name}</strong>
-                    <small>{item.card.type_line || "Card"}</small>
-                  </div>
-                </div>
-                <span>{item.quantity}</span>
-                <span>{item.condition}{item.foil ? " · Foil" : ""}</span>
-                <span>{item.card.set_name || item.card.set_code || "—"}</span>
-                <span>
-                  {item.loan_role === "borrower"
-                    ? `Borrowed from ${item.loan_friend_username ?? "user"}`
-                    : item.loan_role === "lender"
-                      ? `Lent to ${(item.loan_recipient_names ?? [item.loan_friend_username ?? "recipient"]).join(", ")}`
-                      : "Available"}
-                </span>
-              </button>
-            ))}
-          </div>
+          <div className="cardTextList">{selectedHolderItems.map(item=><CardTextRow key={collectionItemKey(item)} item={item} onSelect={setEditing} onAcquire={setAcquiring}/>)}</div>
         )
-      ) : view === "cards" ? (
+      ) : view === "cards"||view==="wishlist" ? (
         collectionQuery.isLoading ? (
           <CardGridSkeleton />
         ) : collectionQuery.error ? (
@@ -653,38 +570,7 @@ export function Tracker({ userId }: { userId: string }) {
           <div className="emptyState"><h2>No cards here yet</h2><p>Add your first card or change your filters.</p></div>
         ) : (
           <>
-            <div className={preferences.view==="text"?"cardTextList":"cardGrid"}>
-              {shown.map((item) => (
-                <button
-                  className={`cardTile ${item.loan_role === "borrower" ? "borrowedCard" : item.loan_role === "lender" ? "lentCard" : ""}`}
-                  key={`${item.loan_role ?? "owned"}-${item.id}-${item.loan_transaction_id ?? 0}`}
-                  onClick={() => setEditing(item)}
-                  aria-label={`${item.quantity} copies of ${item.card.name}, ${placementLabel(item)}, ${item.condition}`}
-                >
-                  <div className="imageShell">
-                    {item.card.image_url ? <img src={item.card.image_url} alt={item.card.name} loading="lazy" decoding="async" /> : <div className="noImage">No image</div>}
-                  </div>
-                  <div className="cardInfo">
-                    <strong className="tileCardName" title={item.card.name}>{item.card.name}</strong>
-                    <div className="tileFacts">
-                      <span className="tileQuantity">×{item.quantity}</span>
-                      <span className="tileCondition" title="Condition and finish">{item.condition}{item.foil ? " · Foil" : ""}</span>
-                    </div>
-                    <span className="tilePlacement" title={placementLabel(item)}>{placementLabel(item)}</span>
-                    <small className={`tileOwnership ${item.loan_role ?? "owned"}`} title={
-                      item.loan_role === "borrower" ? `Borrowed from ${item.loan_friend_username ?? "Deleted account"}${item.loan_status === "return_pending" ? " · Return pending" : ""}`
-                        : item.loan_role === "lender" ? `${item.lent_quantity}× lent to ${(item.loan_recipient_names ?? [item.loan_friend_username ?? "recipient"]).join(", ")}` : "Owned by you"
-                    }>
-                      {item.loan_role === "borrower"
-                        ? `${item.loan_status === "return_pending" ? "Return pending" : "Borrowed"} · ${item.loan_friend_username ?? "Deleted account"}`
-                        : item.loan_role === "lender"
-                          ? `${item.lent_quantity}× lent · ${(item.loan_recipient_names ?? [item.loan_friend_username ?? "recipient"]).join(", ")}`
-                          : "Owned"}
-                    </small>
-                  </div>
-                </button>
-              ))}
-            </div>
+            {preferences.view==="images"?<HolderCardGrid items={shown} onSelect={setEditing} onAcquire={setAcquiring}/>:<div className="cardTextList">{shown.map(item=><CardTextRow key={collectionItemKey(item)} item={item} onSelect={setEditing} onAcquire={setAcquiring}/>)}</div>}
 
             {visible < filtered.length && (
               <div className="loadMore">
@@ -776,8 +662,8 @@ export function Tracker({ userId }: { userId: string }) {
             <div className="mobileSheetGrid">
               <button className={view === "cards" ? "active" : ""} onClick={() => changeView("cards")}><Library size={20} /><span>Cards</span></button>
               <button className={view === "deck" ? "active" : ""} onClick={() => changeView("deck")}><Layers3 size={20} /><span>Decks</span></button>
-              <button className={view === "binder" ? "active" : ""} onClick={() => changeView("binder")}><Archive size={20} /><span>Binders</span></button>
-              <button className={view === "box" ? "active" : ""} onClick={() => changeView("box")}><Box size={20} /><span>Boxes</span></button>
+              <button className={view === "containers" ? "active" : ""} onClick={() => changeView("containers")}><Archive size={20} /><span>Containers</span></button>
+              <button className={view === "wishlist" ? "active" : ""} onClick={() => changeView("wishlist")}><Box size={20} /><span>Wishlist</span></button>
             </div>
           </section>
         </div>
@@ -871,8 +757,8 @@ export function Tracker({ userId }: { userId: string }) {
         </button>
       </nav>
 
-      {popup === "card" && <AddCardModal holders={holders} defaultHolderId={selectedHolder?.id ?? null} onClose={() => setPopup(null)} />}
-      {(popup === "deck" || popup === "binder" || popup === "box") && <HolderCreateModal type={popup} onClose={() => setPopup(null)} />}
+      {popup === "card" && <AddCardModal holders={holders} defaultHolderId={selectedHolder?.id ?? null} defaultMissing={selectedHolder?.type==="deck"||view==="wishlist"} onClose={() => setPopup(null)} />}
+      {(popup === "deck" || popup === "container") && <HolderCreateModal type={popup} onClose={() => setPopup(null)} />}
       {popup === "settings" && <SettingsModal onClose={() => setPopup(null)} desktopPanel={desktopPanel} onDesktopPanelChange={value=>{setDesktopPanel(value);savePreferences(userId,"display",{...loadPreferences(userId,"display"),desktopPanel:value})}} />}
       {popup === "history" && <HistoryModal onClose={() => setPopup(null)} />}
       {popup === "notifications" && <NotificationsModal onClose={() => setPopup(null)} />}
@@ -890,8 +776,7 @@ export function Tracker({ userId }: { userId: string }) {
       {popup === "friends" && <FriendsListModal onClose={() => setPopup(null)} />}
       {popup === "contact" && <CreateContactModal onClose={() => setPopup(null)} />}
       {editing && <CardEditorModal key={`${editing.loan_role}-${editing.id}-${editing.loan_transaction_id}`} item={editing} holders={holders} items={items} panel={desktopPanel&&desktop} onClose={() => setEditing(null)} />}
-      {decklistEditor&&selectedHolder?.type==="deck"&&<DecklistEditorModal deck={selectedHolder} items={items} onClose={()=>setDecklistEditor(false)}/>}
-      {fillEntry&&selectedHolder?.type==="deck"&&<FillDeckModal deck={selectedHolder} entry={fillEntry} items={items} onClose={()=>setFillEntry(null)}/>}
+      {acquiring&&<AcquireCardModal key={acquiring.id} available={items.some(item=>item.id===acquiring.id&&item.is_missing&&item.loan_role!=="borrower")} item={items.find(item=>item.id===acquiring.id&&item.is_missing&&item.loan_role!=="borrower")??acquiring} onClose={()=>setAcquiring(null)}/>}
     </div>
   )
 }

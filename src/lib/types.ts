@@ -56,6 +56,7 @@ export type ActiveLoanDetail = {
 }
 
 export type CollectionItem = {
+  is_missing: boolean
   id: number
   user_id: string
   card_id: string
@@ -78,19 +79,8 @@ export type CollectionItem = {
   reserved_quantity?: number
 }
 
-export type DecklistEntry = {
-  id: number
-  holder_id: number
-  card_id: string
-  identity_key: string
-  desired_quantity: number
-  card: CardCatalog
-}
-export type TargetInput = { card_id: string; desired_quantity: number }
-export type FillAllocation = { kind: "owned" | "borrowed"; source_id: number; quantity: number }
-export type DeckProgressRow = { entry: DecklistEntry; placed: number; borrowed: number; missing: number; available: number }
-export type DeckProgress = { planned: number; placed: number; missing: number; borrowed: number; rows: DeckProgressRow[]; extras: Array<{ item: CollectionItem; quantity: number }> }
 export type UndoPlacement = {
+  is_missing?: boolean
   user_id: string
   kind: "owned" | "borrowed"
   source_id: number

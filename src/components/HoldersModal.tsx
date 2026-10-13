@@ -30,7 +30,7 @@ export function HoldersModal({ holders, onClose }: Props) {
         <header className="modalHeader">
           <div>
             <h2>Holders</h2>
-            <p>Decks and people are both places your cards can be.</p>
+            <p>Manage your decks and physical containers.</p>
           </div>
           <button className="iconButton" onClick={onClose}><X size={18} /></button>
         </header>
@@ -61,7 +61,7 @@ export function HoldersModal({ holders, onClose }: Props) {
             </div>
 
             <div>
-              <h3>Binders & Boxes</h3>
+              <h3>Containers</h3>
               {holders.filter((h) => h.type === "binder" || h.type === "box").map((holder) => (
                 <div className="holderRow" key={holder.id}>
                   <strong>{holder.name}</strong>
@@ -75,3 +75,4 @@ export function HoldersModal({ holders, onClose }: Props) {
     </div>
   )
 }
+

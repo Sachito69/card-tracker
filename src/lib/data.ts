@@ -79,6 +79,7 @@ export async function createHolder(
 function normalizeCardRelation(row: any): CollectionItem {
   return {
     ...row,
+    is_missing: row.is_missing === true,
     card: Array.isArray(row.card) ? row.card[0] : row.card,
     holder: Array.isArray(row.holder) ? row.holder[0] ?? null : row.holder ?? null,
     loan_role: null,
@@ -100,7 +101,7 @@ export async function fetchCollection(): Promise<CollectionItem[]> {
     supabase
       .from("collection_items")
       .select(`
-        id,user_id,card_id,holder_id,quantity,condition,foil,created_at,
+        id,user_id,card_id,holder_id,quantity,condition,foil,is_missing,created_at,
         card:card_catalog(id,oracle_id,name,set_code,set_name,collector_number,image_url,type_line,colors,color_identity,cmc,legalities),
         holder:holders(id,user_id,name,type,format,notes,created_at)
       `)
@@ -267,6 +268,7 @@ export async function fetchCollection(): Promise<CollectionItem[]> {
       holder: borrowerHolderId
         ? borrowedHolderMap.get(borrowerHolderId) ?? null
         : null,
+      is_missing: false,
       loan_role: "borrower",
       loan_transaction_id: tx.id,
       loan_status: tx.status,
@@ -314,41 +316,18 @@ export async function addCollectionItem(args: {
   condition: CollectionItem["condition"]
   foil: boolean
   holder_id: number | null
+  is_missing?: boolean
 }): Promise<void> {
-  const user_id = await getCurrentUserId()
   await saveCatalogCard(args.card)
-
-  let query = supabase
-    .from("collection_items")
-    .select("id,quantity")
-    .eq("user_id", user_id)
-    .eq("card_id", args.card.id)
-    .eq("condition", args.condition)
-    .eq("foil", args.foil)
-
-  query = args.holder_id === null ? query.is("holder_id", null) : query.eq("holder_id", args.holder_id)
-  const { data: existing, error: existingError } = await query.limit(1)
-  if (existingError) throw existingError
-
-  if (existing?.length) {
-    const row = existing[0]
-    const { error } = await supabase
-      .from("collection_items")
-      .update({ quantity: row.quantity + args.quantity })
-      .eq("id", row.id)
-    if (error) throw error
-    return
-  }
-
-  const { error } = await supabase.from("collection_items").insert({
-    user_id,
-    card_id: args.card.id,
-    holder_id: args.holder_id,
-    quantity: args.quantity,
-    condition: args.condition,
-    foil: args.foil,
+  const {error}=await supabase.rpc("add_inventory_stack",{
+    p_card_id:args.card.id,p_quantity:args.quantity,p_condition:args.condition,
+    p_foil:args.foil,p_holder_id:args.holder_id,p_is_missing:args.is_missing??false,
   })
-  if (error) throw error
+  if(error)throw error
+}
+export async function acquireMissingStack(itemId:number,quantity:number):Promise<void> {
+  const {error}=await supabase.rpc("acquire_missing_stack",{p_item_id:itemId,p_quantity:quantity})
+  if(error)throw error
 }
 
 export async function updateCollectionItem(
@@ -460,10 +439,10 @@ export async function fetchLendableInventory() {
   const userId = await getCurrentUserId()
   const [itemsResult, txResult] = await Promise.all([
     supabase.from("collection_items").select(`
-      id,card_id,quantity,condition,foil,holder_id,
+      id,card_id,quantity,condition,foil,holder_id,is_missing,
       card:card_catalog(name,image_url),
       holder:holders(name,type)
-    `).eq("user_id", userId).order("created_at", { ascending: false }),
+    `).eq("user_id", userId).eq("is_missing",false).order("created_at", { ascending: false }),
     supabase.from("card_transactions")
       .select("source_item_id,quantity,status")
       .eq("owner_id", userId)

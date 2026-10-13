@@ -19,10 +19,11 @@ const outgoing = [{ id: 10, source_item_id: 2, owner_id: me, recipient_user_id: 
 let borrowedHolder = 3
 const calls = []
 let failSearch = true
-let planEntries=[]
+let failBulkAdd=false
+const importedCatalog=new Map()
 let inventoryWrites=0
 const card = (id, name, set_name='Commander Masters') => ({
-  id, oracle_id:'ring-oracle', name, set:'cmm', set_name, collector_number:id, image_uris:{normal:art}, type_line:'Artifact',
+  id, oracle_id:'ring-oracle', name, set:'cmm', set_name, collector_number:id, finishes:['nonfoil','foil'], image_uris:{normal:art}, type_line:'Artifact',
 })
 
 async function fixture(page) {
@@ -43,17 +44,29 @@ async function fixture(page) {
     else if(url.pathname.includes('/rpc/')) {
       const body=r.request().postDataJSON(); calls.push({name:table,body})
       if(table==='move_borrowed_with_undo') borrowedHolder=body.p_holder_id
-      if(table==='replace_decklist')planEntries=body.p_entries.map((entry,i)=>({id:40+i,holder_id:body.p_deck_id,identity_key:'oracle:ring-oracle',...entry,card:catalog}))
-      if(table==='fill_deck_entry')borrowedHolder=1
+      if(table==='acquire_missing_stack'){
+        const src=owned.find(row=>row.id===body.p_item_id)
+        if(!src)return r.fulfill({status:400,contentType:'application/json',body:JSON.stringify({message:'Missing card changed; refresh and try again',code:'23514'})})
+        const dest=owned.find(row=>!row.is_missing&&row.holder_id===src.holder_id&&row.card_id===src.card_id&&row.condition===src.condition&&row.foil===src.foil)
+        if(dest)dest.quantity+=body.p_quantity
+        else owned.push({...src,id:100+inventoryWrites++,is_missing:false,quantity:body.p_quantity})
+        src.quantity-=body.p_quantity
+        if(!src.quantity)owned.splice(owned.indexOf(src),1)
+      }
+      if(table==='add_inventory_stack'){
+        if(failBulkAdd&&body.p_card_id==='1'){failBulkAdd=false;return r.fulfill({status:400,contentType:'application/json',body:JSON.stringify({message:'Temporary add failure',code:'23514'})})}
+        inventoryWrites++
+        const cc=importedCatalog.get(body.p_card_id)??catalog
+        owned.push({id:100+inventoryWrites,user_id:me,card_id:body.p_card_id,holder_id:body.p_holder_id,quantity:body.p_quantity,condition:body.p_condition,foil:body.p_foil,is_missing:body.p_is_missing,card:cc,holder:holders.find(h=>h.id===body.p_holder_id)??null,created_at})
+      }
       data=null
-    } else if(table==='decklist_entries')data=planEntries
-    else if(table==='card_catalog')data=r.request().postDataJSON()
+    } else if(table==='card_catalog'){data=r.request().postDataJSON();importedCatalog.set(data.id,data)}
     else if(table==='friendships')data=[{user_a:me,user_b:friend,status:'accepted'}]
     else if(table==='collection_items'){
       if(r.request().method()!=='GET'){inventoryWrites++;data=r.request().postDataJSON()}
-      else data=q.has('card_id')?owned.filter(row=>row.card_id===q.get('card_id').slice(3)):owned
+      else data=q.get('is_missing')==='eq.false'?owned.filter(row=>!row.is_missing):owned
     }
-    else if(table==='holders') data=holders
+    else if(table==='holders') {if(r.request().method()!=='GET'){data={...r.request().postDataJSON(),id:20};holders.push(data)}else data=holders}
     else if(table==='profiles') data=r.request().headers().accept?.includes('object') ? {user_id:me,username:'Sacho'} : [{user_id:me,username:'Sacho'},{user_id:friend,username:'Lexi'}]
     else if(table==='contacts') data=[{id:7,name:'Justin'}]
     else if(table==='card_transactions') {
@@ -74,7 +87,7 @@ async function fixture(page) {
       return r.fulfill({status:503,contentType:'application/json',body:'{}'})
     }
     if(q.includes('Slow')) await new Promise(resolve=>setTimeout(resolve,650))
-    const names=q.startsWith('!') ? [card('1',q.slice(2,-1)),card('2',q.slice(2,-1),'Commander 2018'),card('3',q.slice(2,-1),'Secret Lair')]
+    const names=q.includes('Consecrated Sphinx')?[{...card('sphinx','Consecrated Sphinx','Promo 2026'),set:'pf26',collector_number:'4'}]:q.startsWith('!') ? [card('1',q.slice(2,-1)),card('2',q.slice(2,-1),'Commander 2018'),card('3',q.slice(2,-1),'Secret Lair')]
       : [card('result',q.includes('RetryCard')?'RetryCard':q.includes('Slow')?'Slow Ring':'Sol Ring')]
     await r.fulfill({contentType:'application/json',body:JSON.stringify({data:names,has_more:false})})
   })
@@ -90,9 +103,14 @@ async function fixture(page) {
   try {
     const page=await browser.newPage()
     await fixture(page)
-    for(const width of [1280,390,360]){
+    for(const width of (process.env.TRACKER_WIDTHS?process.env.TRACKER_WIDTHS.split(",").map(Number):[1280,390,360])){
       borrowedHolder=3
-      planEntries=[]
+      owned.splice(0,owned.length,
+        {id:1,user_id:me,card_id:'ring',holder_id:1,quantity:3,condition:'NM',foil:false,is_missing:false,card:catalog,holder:holders[0],created_at},
+        {id:2,user_id:me,card_id:'ring',holder_id:null,quantity:4,condition:'LP',foil:false,is_missing:false,card:{...catalog,name:'Counterspell'},holder:null,created_at},
+        {id:50,user_id:me,card_id:'ring',holder_id:1,quantity:4,condition:'NM',foil:false,is_missing:true,card:catalog,holder:holders[0],created_at})
+      holders.splice(3)
+      if(page.url().startsWith("http"))await page.evaluate(()=>localStorage.clear())
       const height=width===360?640:900
       await page.setViewportSize({width,height})
       const errors=[]
@@ -110,14 +128,16 @@ async function fixture(page) {
       await page.getByRole('button',{name:'All',exact:true}).click()
       await page.getByLabel('Collection view').selectOption('text')
       assert.equal(await page.locator('.cardTextList').count(),1)
+      assert.equal(await page.locator('.cardTextList img').count(),0)
+      assert.match(await page.locator('.cardTextList').textContent(),/CMD #1/)
       await page.getByLabel('Collection view').selectOption('images')
       await page.screenshot({path:path.resolve(__dirname,`cards-${width}.png`)})
 
-      await page.locator('.lentCard').click()
+      await page.locator('.lentCard .cardTileMain').click()
       assert.equal(await page.locator('.modal input[type=number]').isDisabled(),true)
       assert.equal(await page.locator('.modal input[type=checkbox]').isDisabled(),true)
       await page.locator('.modalHeader .iconButton').click()
-      await page.locator('.borrowedCard').click()
+      await page.locator('.borrowedCard .cardTileMain').click()
       assert.equal(await page.locator('.borrowedMovePanel').count(),0)
       await page.getByRole('button',{name:'Move',exact:true}).click()
       await page.locator('.modal select').selectOption('2')
@@ -125,7 +145,7 @@ async function fixture(page) {
       await page.locator('.modal').waitFor({state:'hidden'})
       assert.deepEqual(calls.at(-1),{name:'move_borrowed_with_undo',body:{p_transaction_id:11,p_holder_id:2}})
 
-      await page.locator('.cardTile:not(.lentCard):not(.borrowedCard)').click()
+      await page.locator('.cardTile:not(.lentCard):not(.borrowedCard) .cardTileMain').click()
       await page.getByRole('button',{name:'Move',exact:true}).click()
       await page.locator('.modal input[type=number]').fill('1')
       await page.locator('.modal select').selectOption('2')
@@ -155,21 +175,75 @@ async function fixture(page) {
       assert.equal(style.border,'0px')
       await page.screenshot({path:path.resolve(__dirname,`holders-${width}.png`)})
       await page.locator('.holderRowMain').click()
-      await page.getByRole('button',{name:'Set up decklist'}).click()
-      await page.getByRole('button',{name:'Use current deck cards'}).click()
-      await page.getByLabel('Target copies of Sol Ring').fill('5')
-      await page.getByRole('button',{name:/Save plan/}).click()
-      await page.getByText('3 / 5 placed · 2 missing').waitFor()
+      await page.getByText('3 / 7 present').waitFor()
+      assert.equal(await page.locator('.cardTextList img,.deckContentsList img').count(),0)
+      await page.locator('.inventoryTextRow.missingCard .acquireButton').click()
+      await page.getByLabel('Copies acquired').fill('1')
+      await page.getByRole('button',{name:'Mark acquired',exact:true}).last().click()
+      await page.getByText('4 / 7 present').waitFor()
+      assert.match(await page.locator('.inventoryDeckProgress').textContent(),/3 missing/)
       await page.locator('.searchBox input').fill('not-a-card')
-      assert.match(await page.locator('.deckProgressHeading').innerText(),/3 \/ 5/)
+      assert.match(await page.locator('.inventoryDeckProgress').textContent(),/4 \/ 7/)
       await page.locator('.searchBox input').fill('')
-      await page.getByRole('button',{name:'Fill missing',exact:true}).click()
-      await page.getByRole('button',{name:'Move 1 copies into deck',exact:true}).click()
-      await page.getByText('4 / 5 placed · 1 missing · 1 borrowed').waitFor()
       await page.screenshot({path:path.resolve(__dirname,`deck-${width}.png`)})
       await page.getByRole('button',{name:'Back',exact:true}).click()
-      await nav.getByRole('button',{name:/Collection/}).click()
-      await page.locator(width<768?'.mobileSheetGrid':'.collectionDropdown').getByRole('button',{name:'Cards',exact:true}).click()
+      const chooseView=async name=>{
+        await nav.getByRole('button',{name:/Collection/}).click()
+        await page.locator(width<768?'.mobileSheetGrid':'.collectionDropdown').getByRole('button',{name,exact:true}).click()
+      }
+      await chooseView('Wishlist')
+      await page.getByLabel('Collection view').selectOption('text')
+      assert.equal(await page.locator('.inventoryTextRow').count(),1)
+      assert.match(await page.locator('.inventoryTextRow').textContent(),/×3.*Sol Ring.*Deck - Yuriko/)
+      assert.equal(await page.locator('.inventoryTextRow img').count(),0)
+      await page.getByRole('button',{name:'Mark acquired',exact:true}).click()
+      await page.getByRole('button',{name:'Mark acquired',exact:true}).last().click()
+      await page.locator('.inventoryTextRow').waitFor({state:'hidden'})
+      await chooseView('Containers')
+      assert.equal(await page.locator('.holderRowMain').count(),2)
+      await page.locator(width<768?'.mobileAddButton':'.addContextButton').click()
+      await page.getByLabel('Container type').selectOption('box')
+      await page.getByLabel('Name',{exact:true}).fill('New box')
+      await page.getByRole('button',{name:'Create box',exact:true}).click()
+      await page.getByText('New box',{exact:true}).waitFor()
+      await chooseView('Decks');await page.locator('.holderRowMain').first().click()
+      await page.locator(width<768?'.mobileAddButton':'.addContextButton').click()
+      await page.getByRole('heading',{name:'Add missing card',exact:true}).waitFor()
+      await page.getByRole('button',{name:'Bulk add',exact:true}).click()
+      await page.getByLabel('Bulk list').fill('1 Consecrated Sphinx (PF26) 4 *F*\n1 Sol Ring')
+      await page.getByRole('button',{name:'Search cards',exact:true}).click()
+      await page.getByRole('button',{name:'Add 2 found',exact:true}).waitFor()
+      assert.match(await page.locator('.bulkResults').textContent(),/PF26.*#4.*Foil/)
+      failBulkAdd=true
+      const beforeBulk=calls.length
+      await page.getByRole('button',{name:'Add 2 found',exact:true}).dblclick()
+      await page.getByRole('button',{name:'Add 1 found',exact:true}).waitFor()
+      await page.getByRole('button',{name:'Add 1 found',exact:true}).click()
+      await page.getByRole('button',{name:'Search cards',exact:true}).waitFor()
+      assert.equal(calls.slice(beforeBulk).filter(c=>c.name==='add_inventory_stack'&&c.body.p_card_id==='sphinx').length,1)
+      const sphinx=calls.slice(beforeBulk).find(c=>c.name==='add_inventory_stack'&&c.body.p_card_id==='sphinx').body
+      assert.equal(sphinx.p_is_missing,true);assert.equal(sphinx.p_holder_id,1);assert.equal(sphinx.p_foil,true)
+      if(!process.env.SKIP_BULK_REORDER){
+        await page.getByLabel('Bulk list').fill('1 Sol Ring\n1 Consecrated Sphinx (PF26) 4 *F*')
+        await page.getByRole('button',{name:'Search cards',exact:true}).click()
+        await page.getByRole('button',{name:'Search cards',exact:true}).waitFor()
+        assert.equal(await page.getByRole('button',{name:'Add 0 found',exact:true}).count(),1,'Reordered successful rows must stay Added')
+      }
+
+      await page.getByRole('button',{name:'Close Add Card'}).click()
+      await page.getByRole('button',{name:'Back',exact:true}).click()
+      await chooseView('Wishlist')
+      await page.getByLabel('Collection view').selectOption('text')
+      await page.locator('.inventoryTextRow').filter({hasText:'Consecrated Sphinx'}).getByRole('button',{name:'Mark acquired',exact:true}).click()
+      const removed=owned.find(row=>row.card_id==='sphinx'&&row.is_missing)
+      owned.splice(owned.indexOf(removed),1)
+      await page.locator('.modal').getByRole('button',{name:'Mark acquired',exact:true}).click()
+      await page.locator('.modal').getByText(/Missing card changed/).waitFor()
+      await page.waitForTimeout(100)
+      assert.equal(await page.locator('.modal').getByRole('button',{name:'Mark acquired',exact:true}).isDisabled(),true,'Missing source must disable acquisition')
+      assert.match(await page.locator('.modal').textContent(),/no longer missing|no longer available/)
+      await page.getByRole('button',{name:'Close dialog',exact:true}).click()
+      await chooseView('Cards')
 
       await nav.getByRole('button',{name:/Menu/}).click()
       await page.locator(width<768?'.mobileActionList':'.mainDropdown').getByRole('button',{name:/History/}).click()

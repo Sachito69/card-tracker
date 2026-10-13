@@ -18,6 +18,7 @@ async function cachedJson<T>(url: string, ttlMs: number): Promise<T> {
 
 export type ScryfallCard = {
   id: string
+  finishes?: string[]
   oracle_id?: string
   name: string
   set: string
@@ -100,4 +101,5 @@ export function cardColors(card: ScryfallCard): string[] {
   if (card.colors) return card.colors
   return card.card_faces?.[0]?.colors ?? []
 }
+
 

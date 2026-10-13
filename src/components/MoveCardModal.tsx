@@ -29,7 +29,7 @@ export function MoveCardModal({item,holders,items=[],onClose,onDone=onClose}:{it
     </select></label>
     {move.error&&<p className="errorText" role="alert">{move.error.message}</p>}
     <button className="primaryButton" disabled={move.isPending||target===item.holder_id||!Number.isInteger(quantity)||quantity<1||quantity>item.quantity} onClick={async()=>{
-      const merging=items.some(row=>row.loan_role!=="borrower"&&row.id!==item.id&&row.holder_id===target&&row.card_id===item.card_id&&row.condition===item.condition&&row.foil===item.foil)
+      const merging=items.some(row=>row.loan_role!=="borrower"&&row.id!==item.id&&row.holder_id===target&&row.card_id===item.card_id&&row.condition===item.condition&&row.foil===item.foil&&row.is_missing===item.is_missing)
       if(!borrowed&&(quantity!==item.quantity||merging)&&!await confirm({title:"Move these copies?",description:`${quantity}× ${item.card.name} → ${holders.find(h=>h.id===target)?.name??"Unsorted"}. Partial moves and merged stacks cannot be undone.`,confirmLabel:"Move copies"}))return
       move.mutate()
     }}>{move.isPending?"Moving…":"Move cards"}</button>

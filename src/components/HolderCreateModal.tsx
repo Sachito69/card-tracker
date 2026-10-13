@@ -6,7 +6,7 @@ import { DECK_FORMATS } from "../lib/formats"
 import type { HolderType } from "../lib/types"
 
 type Props = {
-  type: HolderType
+  type: HolderType | "container"
   onClose: () => void
 }
 
@@ -16,7 +16,8 @@ const labels: Record<HolderType, string> = {
   box: "Box",
 }
 
-export function HolderCreateModal({ type, onClose }: Props) {
+export function HolderCreateModal({ type:initialType, onClose }: Props) {
+  const [type,setType]=useState<HolderType>(initialType==="container"?"binder":initialType)
   const queryClient = useQueryClient()
   const [name, setName] = useState("")
   const [notes, setNotes] = useState("")
@@ -35,13 +36,14 @@ export function HolderCreateModal({ type, onClose }: Props) {
       <section className="modal smallModal" onMouseDown={(event) => event.stopPropagation()}>
         <header className="modalHeader">
           <div>
-            <h2>Add {labels[type]}</h2>
+            <h2>Add {initialType==="container"?"container":labels[type]}</h2>
             <p>{labels[type]}s are local holders. Cards can move in and out freely.</p>
           </div>
           <button className="iconButton" onClick={onClose}><X size={18} /></button>
         </header>
 
         <div className="modalBody">
+          {initialType==="container"&&<label>Container type<select value={type} onChange={e=>setType(e.target.value as HolderType)}><option value="binder">Binder</option><option value="box">Box</option></select></label>}
           <label>
             Name
             <input
@@ -82,3 +84,4 @@ export function HolderCreateModal({ type, onClose }: Props) {
     </div>
   )
 }
+

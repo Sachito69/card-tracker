@@ -2139,3 +2139,31 @@ button:disabled{opacity:.55;cursor:not-allowed}
 .addCardFields{border:0;margin:0;padding:0;min-width:0;display:flex;flex-direction:column;gap:14px}.addCardFields>*{flex-shrink:0}.printingFilter{padding:8px 10px;margin:0;background:var(--panel);font-size:11px;color:var(--muted)}.printingFilter input{margin-top:4px;height:36px!important;font-size:13px}.addCardFooter{display:flex;gap:8px}.addCardFooter>button{flex:1;min-width:0}.toastUndo{color:var(--accent);font-weight:700;min-width:50px}
 @media(min-width:1024px){.hasDetailPanel{padding-right:360px}.detailPanel{position:fixed;right:0;top:0;bottom:0;width:360px;background:var(--panel);border-left:1px solid var(--border);overflow-y:auto;z-index:25;box-shadow:-12px 0 30px #0003}.detailPanel .modalHeader h2{font-size:16px;overflow-wrap:anywhere}.detailPanel .editorActions{flex-wrap:wrap}.detailPanel .editorActions>button{flex:1}.hasDetailPanel .desktopTopbar{gap:8px}.hasDetailPanel .desktopTopbar .topActions{gap:4px}}
 @media(max-width:767px){.uxBrowseControls{padding:0 var(--mobile-page-gutter) 8px;gap:8px;align-items:stretch}.ownershipChips{flex-wrap:nowrap;overflow-x:auto;padding-bottom:3px;max-width:100%}.ownershipChips button{white-space:nowrap;min-height:38px;padding:0 11px}.uxViewControls{width:100%;justify-content:space-between}.uxViewControls select{font-size:14px;min-height:36px}.deckProgress{margin:10px var(--mobile-page-gutter);padding:12px}.deckProgressHeading{align-items:flex-start}.deckProgressHeading>button{font-size:11px;padding:0 8px;min-height:38px}.deckProgressHeading h2{font-size:14px}.deckTargetRow{gap:8px}.deckTargetRow button{padding:0 8px;font-size:11px}.cardTextList{margin:10px var(--mobile-page-gutter) 22px}.cardTextList .cardInfo{grid-template-columns:minmax(0,1fr) auto;gap:4px;padding:7px}.cardTextList .tileCardName{font-size:12px}.cardTextList .tileOwnership{grid-column:2;grid-row:2;max-width:100px}.cardTextList .tilePlacement{grid-column:1;grid-row:2}.cardTextList .tileFacts{gap:8px}.decklistDraftRow{flex-wrap:wrap}.decklistDraftRow>div{min-width:120px}.decklistDraftRow>input{width:58px}.decklistDraftRow .textButton{padding:0 6px;font-size:11px}.modal .printingFilter input{font-size:16px}.fillSource{gap:7px}.fillSource>img{width:32px}}
+
+/* Missing inventory and artwork-free text rows */
+.cardTileMain { display:block; width:100%; padding:0; border:0; border-radius:inherit; background:transparent; color:inherit; text-align:left; cursor:pointer; }
+.missingCard { border-color:#756445; }
+.missingStatus { color:#e0ba72; }
+.tileAcquire { margin:0 7px 7px; width:calc(100% - 14px); min-height:32px; padding:5px 7px; justify-content:center; font-size:12px; }
+.inventoryTextRow { display:flex; align-items:center; gap:12px; border:1px solid var(--border,#333741); border-radius:10px; background:var(--panel,#171b22); padding:12px; }
+.inventoryTextDetails { flex:1; min-width:0; display:grid; gap:5px; border:0; padding:0; background:transparent; color:inherit; text-align:left; cursor:pointer; }
+.inventoryTextTitle { display:flex; align-items:baseline; gap:10px; }
+.inventoryQuantity { color:#e0ba72; flex-shrink:0; }
+.inventoryVersion { font-size:12px; color:#a6afbd; overflow-wrap:anywhere; }
+.inventoryMetadata { display:flex; gap:7px 14px; flex-wrap:wrap; color:#a6afbd; font-size:12px; }
+.acquireButton { flex-shrink:0; font-size:12px; }
+.inventoryDeckProgress { border:1px solid #333741; border-radius:12px; background:#171b22; padding:15px; margin:16px 0; }
+.inventoryDeckProgress>div { display:flex; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:10px; }
+.inventoryDeckProgress span { color:#a6afbd; font-size:13px; }
+.inventoryDeckProgress progress { width:100%; height:8px; accent-color:#cfb078; display:block; }
+.inventoryDeckProgress progress::-webkit-progress-bar { background:#30343d; border-radius:8px; }
+.inventoryDeckProgress progress::-webkit-progress-value { background:#cfb078; border-radius:8px; }
+.deckContentsList .inventoryTextRow { border-radius:0; border-left:0; border-right:0; }
+@media (max-width:600px) {
+ .inventoryTextRow { gap:8px; padding:10px; align-items:stretch; flex-direction:column; }
+ .inventoryTextTitle { font-size:13px; }
+ .inventoryMetadata,.inventoryVersion { font-size:11px; }
+ .acquireButton { align-self:flex-end; min-height:32px; padding:5px 9px; }
+ .inventoryDeckProgress { padding:12px; }
+ .tileAcquire { font-size:11px; }
+}

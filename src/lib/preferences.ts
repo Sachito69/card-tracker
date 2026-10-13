@@ -3,10 +3,12 @@ export type Ownership = "all" | "owned" | "borrowed" | "lent" | "unsorted"
 export type TrackerPreferences = { ownership: Ownership; view: "images" | "text"; sort: "name" | "newest" | "quantity"; filters: TrackerFilters; desktopPanel: boolean }
 const defaults = ():TrackerPreferences=>({ownership:"all",view:"images",sort:"name",filters:{colors:[],commanderColors:[],cardType:"",manaValue:"",deckFormat:""},desktopPanel:false})
 export function loadPreferences(userId:string,context:string):TrackerPreferences {
+  if(context==="binder"||context==="box")context="containers"
   const fallback=defaults()
   if(context.includes(":")) fallback.view="text"
   try {
-    const p=JSON.parse(localStorage.getItem(`tracker-preferences:${userId}:${context}`)??"{}")
+    const stored=localStorage.getItem(`tracker-preferences:${userId}:${context}`)??(context==="containers"?(localStorage.getItem(`tracker-preferences:${userId}:binder`)??localStorage.getItem(`tracker-preferences:${userId}:box`)):null)
+    const p=JSON.parse(stored??"{}")
     if(!p||typeof p!=="object") return fallback
     const colors=(v:unknown)=>Array.isArray(v)?v.filter((c):c is string=>typeof c==="string"&&["W","U","B","R","G","C"].includes(c)):[]
     return {
@@ -24,5 +26,6 @@ export function loadPreferences(userId:string,context:string):TrackerPreferences
   } catch { return fallback }
 }
 export function savePreferences(userId:string,context:string,value:TrackerPreferences):void {
+  if(context==="binder"||context==="box")context="containers"
   try { localStorage.setItem(`tracker-preferences:${userId}:${context}`,JSON.stringify(value)) } catch { /* Storage can be disabled. */ }
 }

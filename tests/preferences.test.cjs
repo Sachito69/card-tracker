@@ -21,3 +21,11 @@ test('preferences isolate accounts and contexts and tolerate corrupted/unavailab
   assert.doesNotThrow(()=>savePreferences('a','cards',defaults))
   delete global.localStorage
 })
+test('legacy binder and box contexts map to Containers',()=>{
+ const store=new Map();global.localStorage={getItem:k=>store.get(k)??null,setItem:(k,v)=>store.set(k,v)};
+ const {loadPreferences,savePreferences}=load('src/lib/preferences.ts');
+ savePreferences('a','binder',{...loadPreferences('a','cards'),view:'text'});
+ assert.equal(loadPreferences('a','containers').view,'text');
+ assert.equal(loadPreferences('b','containers').view,'images');
+ delete global.localStorage;
+})

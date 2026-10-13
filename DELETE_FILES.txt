@@ -1,0 +1,12 @@
+Delete these obsolete files when copying the update into your project:
+
+src/components/DeckProgress.tsx
+src/components/DecklistEditorModal.tsx
+src/components/FillDeckModal.tsx
+src/lib/decklist.ts
+src/lib/decklistData.ts
+tests/deck-progress-ui.test.cjs
+tests/decklist.test.cjs
+tests/sql/tracker-ux.sql
+
+The included Supabase SQL has already been applied to mtg-tracker.
