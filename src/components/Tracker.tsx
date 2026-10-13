@@ -35,7 +35,15 @@ import { AddCardModal } from "./AddCardModal"
 import { AddFriendModal } from "./AddFriendModal"
 import { CardEditorModal } from "./CardEditorModal"
 import { CreateContactModal } from "./CreateContactModal"
-import { FilterModal, EMPTY_FILTERS, type TrackerFilters } from "./FilterModal"
+import { FilterModal, type TrackerFilters } from "./FilterModal"
+import { loadPreferences,savePreferences,type TrackerPreferences,type Ownership } from "../lib/preferences"
+import { fetchDecklist } from "../lib/decklistData"
+import { DeckProgress } from "./DeckProgress"
+import { DecklistEditorModal } from "./DecklistEditorModal"
+import { FillDeckModal } from "./FillDeckModal"
+import { HolderCardGrid } from "./HolderCardGrid"
+import type { DecklistEntry } from "../lib/types"
+import { cardIdentity } from "../lib/decklist"
 import { FriendsListModal } from "./FriendsListModal"
 import { HolderCreateModal } from "./HolderCreateModal"
 import { HistoryModal } from "./HistoryModal"
@@ -121,7 +129,6 @@ export function Tracker({ userId }: { userId: string }) {
   const { confirm, toast } = useFeedback()
   const [view, setView] = useState<CollectionView>("cards")
   const [search, setSearch] = useState("")
-  const [filters, setFilters] = useState<TrackerFilters>(EMPTY_FILTERS)
   const [visible, setVisible] = useState(PAGE_SIZE)
   const [popup, setPopup] = useState<Popup>(null)
   const [showCollectionMenu, setShowCollectionMenu] = useState(false)
@@ -129,6 +136,33 @@ export function Tracker({ userId }: { userId: string }) {
   const [showMainMenu, setShowMainMenu] = useState(false)
   const [editing, setEditing] = useState<CollectionItem | null>(null)
   const [selectedHolder, setSelectedHolder] = useState<Holder | null>(null)
+  const preferenceContext=selectedHolder?`${selectedHolder.type}:${selectedHolder.id}`:view
+  const preferenceKey=`${userId}:${preferenceContext}`
+  const [savedPreferences,setSavedPreferences]=useState({key:`${userId}:cards`,value:loadPreferences(userId,"cards")})
+  const preferences=savedPreferences.key===preferenceKey?savedPreferences.value:loadPreferences(userId,preferenceContext)
+  function updatePreferences(patch:Partial<TrackerPreferences>){
+    const value={...preferences,...patch}
+    setSavedPreferences({key:preferenceKey,value});savePreferences(userId,preferenceContext,value)
+  }
+  const filters=preferences.filters
+  const setFilters=(value:TrackerFilters)=>updatePreferences({filters:value})
+  const [desktopPanel,setDesktopPanel]=useState(()=>loadPreferences(userId,"display").desktopPanel)
+  const [desktop,setDesktop]=useState(()=>window.matchMedia("(min-width:1024px)").matches)
+  const [decklistEditor,setDecklistEditor]=useState(false)
+  const [fillEntry,setFillEntry]=useState<DecklistEntry|null>(null)
+  const decklistQuery=useQuery({queryKey:["decklist",userId,selectedHolder?.id],queryFn:()=>fetchDecklist(selectedHolder!.id),enabled:selectedHolder?.type==="deck"})
+  useEffect(()=>{setDesktopPanel(loadPreferences(userId,"display").desktopPanel)},[userId])
+  useEffect(()=>{
+    const media=window.matchMedia("(min-width:1024px)"),change=()=>setDesktop(media.matches)
+    media.addEventListener("change",change);return()=>media.removeEventListener("change",change)
+  },[])
+  const matchesOwnership=(item:CollectionItem)=>preferences.ownership==="all"||
+    (preferences.ownership==="owned"&&item.loan_role!=="borrower")||
+    (preferences.ownership==="borrowed"&&item.loan_role==="borrower")||
+    (preferences.ownership==="lent"&&(item.lent_quantity??0)>0)||
+    (preferences.ownership==="unsorted"&&item.holder_id===null)
+  const sortItems=(a:CollectionItem,b:CollectionItem)=>preferences.sort==="quantity"?b.quantity-a.quantity||a.card.name.localeCompare(b.card.name):
+    preferences.sort==="newest"?Date.parse(b.created_at)-Date.parse(a.created_at)||a.card.name.localeCompare(b.card.name):a.card.name.localeCompare(b.card.name)
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set())
   const collectionMenuRef = useRef<HTMLDivElement>(null)
   const communityMenuRef = useRef<HTMLDivElement>(null)
@@ -168,15 +202,15 @@ export function Tracker({ userId }: { userId: string }) {
     const q = view === "cards" ? search.trim().toLowerCase() : ""
 
     return items.filter((item) => {
-      if (q && !item.card.name.toLowerCase().includes(q)) return false
+      if (!matchesOwnership(item)||(q && !item.card.name.toLowerCase().includes(q))) return false
       if (view !== "cards") return true
       if (!matchesColors(item, filters.colors)) return false
       if (!matchesCommander(item, filters.commanderColors)) return false
       if (filters.cardType && primaryType(item.card.type_line) !== filters.cardType) return false
       if (!matchesManaValue(item, filters.manaValue)) return false
       return true
-    })
-  }, [items, search, filters, view])
+    }).sort(sortItems)
+  }, [items, search, filters, view,preferences.ownership,preferences.sort])
 
   const holderRows = useMemo(() => {
     if (view === "cards") return []
@@ -208,12 +242,13 @@ export function Tracker({ userId }: { userId: string }) {
 
     return items
       .filter((item) => item.holder_id === selectedHolder.id)
+      .filter(matchesOwnership)
       .filter((item) => !q || item.card.name.toLowerCase().includes(q))
       .filter((item) => matchesColors(item, filters.colors))
       .filter((item) => matchesCommander(item, filters.commanderColors))
       .filter((item) => !filters.cardType || primaryType(item.card.type_line) === filters.cardType)
       .filter((item) => matchesManaValue(item, filters.manaValue))
-      .sort((a, b) => a.card.name.localeCompare(b.card.name))
+      .sort(sortItems)
   }, [
     selectedHolder,
     items,
@@ -222,6 +257,7 @@ export function Tracker({ userId }: { userId: string }) {
     filters.commanderColors,
     filters.cardType,
     filters.manaValue,
+    preferences.ownership,preferences.sort,
   ])
 
   const selectedHolderCardCount = useMemo(
@@ -344,7 +380,7 @@ export function Tracker({ userId }: { userId: string }) {
       : `Search ${viewLabels[view].toLowerCase()}...`
 
   return (
-    <div className="trackerPage">
+    <div className={`trackerPage ${editing&&desktopPanel&&desktop?"hasDetailPanel":""}`}>
       <header className="topbar navOnlyTopbar desktopTopbar">
         <div className="topActions">
           <div className="menuWrap" ref={collectionMenuRef}>
@@ -487,6 +523,23 @@ export function Tracker({ userId }: { userId: string }) {
         </button>
       </section>
 
+      {(view==="cards"||selectedHolder)&&<section className="uxBrowseControls">
+        <div className="ownershipChips" role="group" aria-label="Ownership filters">
+          {(["all","owned","borrowed","lent","unsorted"] as Ownership[]).map(value=><button key={value} className={preferences.ownership===value?"active":""} aria-pressed={preferences.ownership===value} onClick={()=>{updatePreferences({ownership:value});setVisible(PAGE_SIZE)}}>{value[0].toUpperCase()+value.slice(1)}</button>)}
+        </div>
+        <div className="uxViewControls"><label>View<select aria-label="Collection view" value={preferences.view} onChange={e=>updatePreferences({view:e.target.value as TrackerPreferences["view"]})}><option value="images">Images</option><option value="text">Text</option></select></label>
+          <label>Sort<select aria-label="Sort cards" value={preferences.sort} onChange={e=>updatePreferences({sort:e.target.value as TrackerPreferences["sort"]})}><option value="name">Name</option><option value="newest">Newest added</option><option value="quantity">Quantity</option></select></label></div>
+      </section>}
+      {selectedHolder?.type==="deck"&&<>
+        {decklistQuery.isLoading?<p className="deckProgress">Loading saved decklist…</p>:decklistQuery.error?<p className="deckProgress errorText">{decklistQuery.error.message}</p>:
+          <DeckProgress deck={selectedHolder} entries={decklistQuery.data??[]} items={items} onEdit={()=>setDecklistEditor(true)} onFill={setFillEntry} search={search}
+            matchesEntry={entry=>{
+              const target={card:entry.card} as CollectionItem
+              return matchesColors(target,filters.colors)&&matchesCommander(target,filters.commanderColors)&&
+                (!filters.cardType||primaryType(entry.card.type_line)===filters.cardType)&&matchesManaValue(target,filters.manaValue)&&
+                (preferences.ownership==="all"||items.some(item=>item.holder_id===selectedHolder.id&&cardIdentity(item.card)===entry.identity_key&&matchesOwnership(item)))
+            }}/>}
+      </>}
       {selectedHolder ? (
         collectionQuery.isLoading ? (
           <ListSkeleton rows={5} />
@@ -495,7 +548,7 @@ export function Tracker({ userId }: { userId: string }) {
             <h2>No cards here yet</h2>
             <p>Add a card to {selectedHolder.name} or change your filters.</p>
           </div>
-        ) : selectedHolder.type === "deck" ? (
+        ) : preferences.view==="images" ? <HolderCardGrid items={selectedHolderItems} onSelect={setEditing}/> : selectedHolder.type === "deck" ? (
           <div className="deckGroupedContents">
             {deckGroups.map((group) => (
               <section className="deckTypeGroup" key={group.type}>
@@ -600,7 +653,7 @@ export function Tracker({ userId }: { userId: string }) {
           <div className="emptyState"><h2>No cards here yet</h2><p>Add your first card or change your filters.</p></div>
         ) : (
           <>
-            <div className="cardGrid">
+            <div className={preferences.view==="text"?"cardTextList":"cardGrid"}>
               {shown.map((item) => (
                 <button
                   className={`cardTile ${item.loan_role === "borrower" ? "borrowedCard" : item.loan_role === "lender" ? "lentCard" : ""}`}
@@ -820,7 +873,7 @@ export function Tracker({ userId }: { userId: string }) {
 
       {popup === "card" && <AddCardModal holders={holders} defaultHolderId={selectedHolder?.id ?? null} onClose={() => setPopup(null)} />}
       {(popup === "deck" || popup === "binder" || popup === "box") && <HolderCreateModal type={popup} onClose={() => setPopup(null)} />}
-      {popup === "settings" && <SettingsModal onClose={() => setPopup(null)} />}
+      {popup === "settings" && <SettingsModal onClose={() => setPopup(null)} desktopPanel={desktopPanel} onDesktopPanelChange={value=>{setDesktopPanel(value);savePreferences(userId,"display",{...loadPreferences(userId,"display"),desktopPanel:value})}} />}
       {popup === "history" && <HistoryModal onClose={() => setPopup(null)} />}
       {popup === "notifications" && <NotificationsModal onClose={() => setPopup(null)} />}
       {popup === "pending" && <PendingModal onClose={() => setPopup(null)} />}
@@ -836,8 +889,11 @@ export function Tracker({ userId }: { userId: string }) {
       {popup === "add-friend" && <AddFriendModal onClose={() => setPopup(null)} />}
       {popup === "friends" && <FriendsListModal onClose={() => setPopup(null)} />}
       {popup === "contact" && <CreateContactModal onClose={() => setPopup(null)} />}
-      {editing && <CardEditorModal item={editing} holders={holders} onClose={() => setEditing(null)} />}
+      {editing && <CardEditorModal key={`${editing.loan_role}-${editing.id}-${editing.loan_transaction_id}`} item={editing} holders={holders} items={items} panel={desktopPanel&&desktop} onClose={() => setEditing(null)} />}
+      {decklistEditor&&selectedHolder?.type==="deck"&&<DecklistEditorModal deck={selectedHolder} items={items} onClose={()=>setDecklistEditor(false)}/>}
+      {fillEntry&&selectedHolder?.type==="deck"&&<FillDeckModal deck={selectedHolder} entry={fillEntry} items={items} onClose={()=>setFillEntry(null)}/>}
     </div>
   )
 }
+
 

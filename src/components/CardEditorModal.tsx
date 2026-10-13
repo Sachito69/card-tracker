@@ -1,253 +1,42 @@
-import { useMemo, useState } from "react"
-import { CornerUpLeft, MoveRight, Trash2, X } from "lucide-react"
-import { useMutation, useQueryClient } from "@tanstack/react-query"
-import {
-  completeContactLoan,
-  deleteCollectionItem,
-  moveBorrowedLoan,
-  moveCollectionQuantity,
-  requestLoanReturn,
-  updateCollectionItem,
-} from "../lib/data"
-import type { CollectionItem, Holder } from "../lib/types"
+import { useState } from "react"
+import { X } from "lucide-react"
+import { useMutation,useQueryClient } from "@tanstack/react-query"
+import { completeContactLoan,deleteCollectionItem,moveCollectionQuantity,requestLoanReturn,updateCollectionItem } from "../lib/data"
+import type { CollectionItem,Holder } from "../lib/types"
 import { useFeedback } from "./Feedback"
+import { ModalFrame } from "./ModalFrame"
+import { MoveCardModal } from "./MoveCardModal"
+import { LendCardModal } from "./LendCardModal"
 
-export function CardEditorModal({ item, holders, onClose }: { item: CollectionItem; holders: Holder[]; onClose: () => void }) {
-  const qc = useQueryClient()
-  const { confirm, toast } = useFeedback()
-  const [quantity, setQuantity] = useState(item.quantity)
-  const [condition, setCondition] = useState(item.condition)
-  const [foil, setFoil] = useState(item.foil)
-  const [moveQty, setMoveQty] = useState(1)
-  const [moveHolderId, setMoveHolderId] = useState("")
-  const [borrowHolderId, setBorrowHolderId] = useState(item.holder_id == null ? "" : String(item.holder_id))
-
-  const isBorrowed = item.loan_role === "borrower"
-  const isLent = item.loan_role === "lender" && (item.lent_quantity ?? 0) > 0
-  const activeLoans = item.active_loans ?? []
-  const lentToLabel =
-    item.loan_recipient_names?.length
-      ? item.loan_recipient_names.join(", ")
-      : item.loan_friend_username ?? "recipient"
-  const holderGroups = useMemo(() => ({
-    deck: holders.filter((holder) => holder.type === "deck"),
-    binder: holders.filter((holder) => holder.type === "binder"),
-    box: holders.filter((holder) => holder.type === "box"),
-  }), [holders])
-
-  const placementLabel = item.holder
-    ? `${item.holder.type[0].toUpperCase() + item.holder.type.slice(1)} - ${item.holder.name}`
-    : "Unsorted"
-
-  const refresh = async () => {
-    await Promise.all([
-      qc.invalidateQueries({ queryKey: ["collection"] }),
-      qc.invalidateQueries({ queryKey: ["history"] }),
-      qc.invalidateQueries({ queryKey: ["notifications"] }),
-      qc.invalidateQueries({ queryKey: ["lendable-inventory"] }),
-    ])
-  }
-
-  const save = useMutation({
-    mutationFn: () => updateCollectionItem(item.id, isLent
-      ? { condition }
-      : { quantity: Math.max(1, quantity), condition, foil }),
-    onSuccess: async () => { toast("Card details saved"); await refresh(); onClose() },
-  })
-
-  const remove = useMutation({
-    mutationFn: () =>
-      item.holder_id !== null
-        ? moveCollectionQuantity(item.id, item.quantity, null)
-        : deleteCollectionItem(item.id),
-    onSuccess: async () => { toast(item.holder_id !== null ? "Card moved to Unsorted" : "Card removed"); await refresh(); onClose() },
-  })
-
-  const move = useMutation({
-    mutationFn: () => moveCollectionQuantity(item.id, Math.max(1, Math.min(moveQty, item.quantity)), moveHolderId ? Number(moveHolderId) : null),
-    onSuccess: async () => { toast("Card moved"); await refresh(); onClose() },
-  })
-
-  const requestReturn = useMutation({
-    mutationFn: () => requestLoanReturn(item.loan_transaction_id!),
-    onSuccess: async () => { toast("Return request sent"); await refresh(); onClose() },
-  })
-
-  const moveBorrowed = useMutation({
-    mutationFn: () =>
-      moveBorrowedLoan(
-        item.loan_transaction_id!,
-        borrowHolderId ? Number(borrowHolderId) : null,
-      ),
-    onSuccess: async () => {
-      toast(borrowHolderId ? "Borrowed card moved" : "Borrowed card moved to Unsorted")
-      await refresh()
-      onClose()
-    },
-  })
-
-  const completeLocalReturn = useMutation({
-    mutationFn: (transactionId: number) => completeContactLoan(transactionId),
-    onSuccess: async () => {
-      toast("Card marked as returned")
-      await refresh()
-    },
-  })
-
-  return (
-    <div className="modalBackdrop" onMouseDown={onClose}>
-      <section className="modal smallModal" onMouseDown={(event) => event.stopPropagation()}>
-        <header className="modalHeader">
-          <div>
-            <h2>{item.card.name}</h2>
-            <p>
-              {isBorrowed
-                ? `Borrowed from ${item.loan_friend_username ?? "user"}`
-                : isLent
-                  ? `Lent ${item.lent_quantity}× to ${lentToLabel}`
-                  : item.card.set_name}
-            </p>
-          </div>
-          <button className="iconButton" onClick={onClose}><X size={18} /></button>
-        </header>
-
-        <div className="modalBody">
-          {isBorrowed ? (
-            <>
-              <div className="borrowedSummary">
-                <strong>{item.quantity}× {item.card.name}</strong>
-                <small>{item.condition}{item.foil ? " · Foil" : ""}</small>
-                <span className="placementTag">{placementLabel}</span>
-                <small>Status: {item.loan_status === "return_pending" ? "Return waiting for lender confirmation" : "On loan to you"}</small>
-              </div>
-
-              <div className="movePanel borrowedMovePanel">
-                <strong>Placement</strong>
-                <small className="settingsHint">You can organize a borrowed card without changing who owns it.</small>
-                <label>
-                  Destination
-                  <select value={borrowHolderId} onChange={(event) => setBorrowHolderId(event.target.value)}>
-                    <option value="">Unsorted</option>
-                    <optgroup label="Decks">{holderGroups.deck.map((holder) => <option value={holder.id} key={holder.id}>{holder.name}</option>)}</optgroup>
-                    <optgroup label="Binders">{holderGroups.binder.map((holder) => <option value={holder.id} key={holder.id}>{holder.name}</option>)}</optgroup>
-                    <optgroup label="Boxes">{holderGroups.box.map((holder) => <option value={holder.id} key={holder.id}>{holder.name}</option>)}</optgroup>
-                  </select>
-                </label>
-                <button
-                  className="secondaryButton"
-                  disabled={
-                    moveBorrowed.isPending ||
-                    (borrowHolderId ? Number(borrowHolderId) : null) === item.holder_id
-                  }
-                  onClick={() => moveBorrowed.mutate()}
-                >
-                  <MoveRight size={15} /> {moveBorrowed.isPending ? "Moving..." : "Move borrowed card"}
-                </button>
-                {moveBorrowed.error && <p className="errorText">{moveBorrowed.error.message}</p>}
-              </div>
-
-              <button className="primaryButton" disabled={item.loan_status === "return_pending" || requestReturn.isPending} onClick={() => requestReturn.mutate()}>
-                <CornerUpLeft size={15} /> {item.loan_status === "return_pending" ? "Return requested" : "Return card"}
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="formGrid">
-                <label>Quantity<input type="number" min={1} disabled={isLent} value={quantity} onChange={(event) => setQuantity(Number(event.target.value))} /></label>
-                <label>Condition<select value={condition} onChange={(event) => setCondition(event.target.value as CollectionItem["condition"])}><option>NM</option><option>LP</option><option>MP</option><option>HP</option><option>DMG</option></select></label>
-              </div>
-              <label className="checkRow"><input type="checkbox" checked={foil} disabled={isLent} onChange={(event) => setFoil(event.target.checked)} /> Foil</label>
-              {isLent && <p className="settingsHint">Quantity, printing, and finish are locked until all loans are returned. Condition can still be updated.</p>}
-
-              {isLent ? (
-                <>
-                  <div className="loanRecipientList">
-                    <strong>Currently lent to</strong>
-                    {activeLoans.map((loan) => (
-                      <div className="loanRecipientRow" key={loan.transaction_id}>
-                        <div>
-                          <span>{loan.recipient_name}</span>
-                          <small>{loan.quantity}× {item.card.name}</small>
-                        </div>
-
-                        {loan.recipient_kind === "contact" && (
-                          <button
-                            className="primaryButton"
-                            disabled={completeLocalReturn.isPending}
-                            onClick={async () => {
-                              const approved = await confirm({
-                                title: "Mark card as returned?",
-                                description: `${loan.quantity}× ${item.card.name} will be marked returned from ${loan.recipient_name}.`,
-                                confirmLabel: "Mark returned",
-                              })
-                              if (approved) completeLocalReturn.mutate(loan.transaction_id)
-                            }}
-                          >
-                            <CornerUpLeft size={14} />
-                            {completeLocalReturn.isPending ? "Returning..." : `Return from ${loan.recipient_name}`}
-                          </button>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-
-                  {completeLocalReturn.error && (
-                    <p className="errorText">{completeLocalReturn.error.message}</p>
-                  )}
-
-                  <div className="lockedMove">
-                    <strong>Move unavailable</strong>
-                    <small>This stack currently has lent cards. Return them before moving the stack.</small>
-                  </div>
-                </>
-              ) : (
-                <div className="movePanel">
-                  <strong>Move cards</strong>
-                  <div className="moveGrid">
-                    <label>Quantity<input type="number" min="1" max={item.quantity} value={moveQty} onChange={(event) => setMoveQty(Number(event.target.value))} /></label>
-                    <label>Destination<select value={moveHolderId} onChange={(event) => setMoveHolderId(event.target.value)}>
-                      <option value="">Unsorted</option>
-                      <optgroup label="Decks">{holderGroups.deck.map((holder) => <option value={holder.id} key={holder.id}>{holder.name}</option>)}</optgroup>
-                      <optgroup label="Binders">{holderGroups.binder.map((holder) => <option value={holder.id} key={holder.id}>{holder.name}</option>)}</optgroup>
-                      <optgroup label="Boxes">{holderGroups.box.map((holder) => <option value={holder.id} key={holder.id}>{holder.name}</option>)}</optgroup>
-                    </select></label>
-                  </div>
-                  <button className="secondaryButton" disabled={move.isPending} onClick={() => move.mutate()}><MoveRight size={15} /> {move.isPending ? "Moving..." : "Move"}</button>
-                </div>
-              )}
-
-              {(save.error || remove.error || move.error) && <p className="errorText">{save.error?.message ?? remove.error?.message ?? move.error?.message}</p>}
-              <div className="editorActions">
-                <button
-                  className={item.holder_id !== null ? "secondaryButton" : "dangerButton"}
-                  disabled={isLent || remove.isPending}
-                  onClick={async () => {
-                    const inHolder = item.holder_id !== null
-                    const approved = await confirm({
-                      title: inHolder ? "Move to Unsorted?" : "Remove card?",
-                      description: inHolder
-                        ? `All ${item.card.name} copies will be moved to Unsorted from ${item.holder?.name ?? "this holder"}.`
-                        : `${item.card.name} will be removed from your tracker.`,
-                      confirmLabel: inHolder ? "Move card" : "Remove card",
-                      tone: inHolder ? "default" : "danger",
-                    })
-                    if (approved) remove.mutate()
-                  }}
-                >
-                  {item.holder_id !== null ? <MoveRight size={15} /> : <Trash2 size={15} />}
-                  {remove.isPending
-                    ? "Working..."
-                    : item.holder_id !== null
-                      ? "Remove from holder"
-                      : "Remove"}
-                </button>
-                <button className="primaryButton" disabled={save.isPending} onClick={() => save.mutate()}>{save.isPending ? "Saving..." : "Save details"}</button>
-              </div>
-            </>
-          )}
-        </div>
-      </section>
+export function CardEditorModal({item,holders,items=[],onClose,panel=false}:{item:CollectionItem;holders:Holder[];items?:CollectionItem[];onClose:()=>void;panel?:boolean}) {
+  const qc=useQueryClient(),{toast,confirm}=useFeedback()
+  const [quantity,setQuantity]=useState(item.quantity),[condition,setCondition]=useState(item.condition),[foil,setFoil]=useState(item.foil)
+  const [action,setAction]=useState<"move"|"lend"|null>(null)
+  const borrowed=item.loan_role==="borrower",lent=(item.lent_quantity??0)>0
+  const reserved=item.reserved_quantity??item.lent_quantity??0
+  const placement=item.holder?`${item.holder.type} - ${item.holder.name}`:"Unsorted"
+  const refresh=()=>Promise.all(["collection","holders","decklist","history","notifications","pending","lendable-inventory"].map(key=>qc.invalidateQueries({queryKey:[key]})))
+  const save=useMutation({mutationFn:()=>updateCollectionItem(item.id,lent?{condition}:{quantity,condition,foil}),onSuccess:async()=>{await refresh();toast("Card details saved");onClose()}})
+  const remove=useMutation({mutationFn:()=>item.holder_id!==null?moveCollectionQuantity(item.id,item.quantity,null):deleteCollectionItem(item.id),onSuccess:async()=>{await refresh();toast(item.holder_id!==null?"Card moved to Unsorted":"Card removed");onClose()}})
+  const requestReturn=useMutation({mutationFn:()=>requestLoanReturn(item.loan_transaction_id!),onSuccess:async()=>{await refresh();toast("Return request sent");onClose()}})
+  const contactReturn=useMutation({mutationFn:(id:number)=>completeContactLoan(id),onSuccess:async()=>{await refresh();toast("Card marked returned");onClose()}})
+  if(action==="move")return <MoveCardModal item={item} holders={holders} items={items} onClose={()=>setAction(null)} onDone={onClose}/>
+  if(action==="lend")return <LendCardModal item={item} onClose={()=>setAction(null)} onDone={onClose}/>
+  const body=<>
+    <div className="editorSummary">{item.card.image_url&&<img src={item.card.image_url} alt={item.card.name}/>}<div><strong>{item.quantity}× {item.card.name}</strong><small>{item.card.set_name} #{item.card.collector_number}</small><span className="placementTag">{placement}</span><small>{borrowed?`Borrowed from ${item.loan_friend_username??"Unnamed account"}`:lent?`${item.lent_quantity}× lent`:"Owned by you"}</small></div></div>
+    <div className="uxActionRow"><button className="secondaryButton" disabled={!borrowed&&reserved>0} onClick={()=>setAction("move")}>Move</button>
+      {borrowed?<button className="primaryButton" disabled={item.loan_status==="return_pending"||requestReturn.isPending} onClick={()=>requestReturn.mutate()}>{item.loan_status==="return_pending"?"Waiting for confirmation":requestReturn.isPending?"Requesting…":"Request return"}</button>:<button className="secondaryButton" disabled={item.quantity-reserved<1} onClick={()=>setAction("lend")}>Lend</button>}
     </div>
-  )
+    {!borrowed&&reserved>0&&<p className="settingsHint">Move is unavailable while this stack has pending or active transactions.</p>}
+    {borrowed?<p className="settingsHint">{item.condition}{item.foil?" · Foil":""}. Quantity and printing stay with the lender.</p>:<>
+      <div className="formGrid"><label>Quantity<input type="number" min={1} disabled={lent||save.isPending} value={quantity} onChange={e=>setQuantity(Number(e.target.value))}/></label><label>Condition<select disabled={save.isPending} value={condition} onChange={e=>setCondition(e.target.value as CollectionItem["condition"])}>{["NM","LP","MP","HP","DMG"].map(c=><option key={c}>{c}</option>)}</select></label></div>
+      <label className="checkRow"><input type="checkbox" checked={foil} disabled={lent||save.isPending} onChange={e=>setFoil(e.target.checked)}/> Foil</label>
+      {lent&&<p className="settingsHint">Quantity, printing, and finish are locked until all loans are returned.</p>}
+      {(item.active_loans??[]).map(loan=><div className="loanRecipientRow" key={loan.transaction_id}><div><span>{loan.recipient_name}</span><small>{loan.quantity}× on loan{loan.status==="return_pending"?" · Return pending":""}</small></div>{loan.recipient_kind==="contact"&&<button className="secondaryButton" disabled={contactReturn.isPending} onClick={async()=>{if(await confirm({title:"Mark loan returned?",description:`${loan.quantity}× ${item.card.name} from ${loan.recipient_name}.`,confirmLabel:"Mark returned"}))contactReturn.mutate(loan.transaction_id)}}>Mark returned</button>}</div>)}
+      <div className="editorActions"><button className="dangerButton" disabled={reserved>0||remove.isPending||save.isPending} onClick={async()=>{if(await confirm({title:item.holder_id!==null?"Move to Unsorted?":"Remove card?",description:`${item.quantity}× ${item.card.name}.`,confirmLabel:item.holder_id!==null?"Move to Unsorted":"Remove card",tone:"danger"}))remove.mutate()}}>{remove.isPending?"Working…":item.holder_id!==null?"Remove from holder":"Remove"}</button><button className="primaryButton" disabled={save.isPending||remove.isPending||!Number.isInteger(quantity)||quantity<1} onClick={()=>save.mutate()}>{save.isPending?"Saving…":"Save details"}</button></div>
+    </>}
+    {[save.error,remove.error,requestReturn.error,contactReturn.error].filter(Boolean).map((error,i)=><p className="errorText" role="alert" key={i}>{error!.message}</p>)}
+  </>
+  if(panel)return <aside className="detailPanel" aria-label="Card details"><header className="modalHeader"><h2>{item.card.name}</h2><button className="iconButton" aria-label="Close card details" onClick={onClose}><X size={18}/></button></header><div className="modalBody">{body}</div></aside>
+  return <ModalFrame title={item.card.name} onClose={onClose} busy={save.isPending||remove.isPending||requestReturn.isPending||contactReturn.isPending}>{body}</ModalFrame>
 }
-

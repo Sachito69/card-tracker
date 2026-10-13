@@ -96,7 +96,7 @@ function normalizeCardRelation(row: any): CollectionItem {
 export async function fetchCollection(): Promise<CollectionItem[]> {
   const userId = await getCurrentUserId()
 
-  const [ownedResult, outgoingResult, incomingResult] = await Promise.all([
+  const [ownedResult, outgoingResult, incomingResult, reservedResult] = await Promise.all([
     supabase
       .from("collection_items")
       .select(`
@@ -120,13 +120,18 @@ export async function fetchCollection(): Promise<CollectionItem[]> {
       .eq("recipient_user_id", userId)
       .eq("transaction_type", "loan")
       .in("status", ["active", "return_pending"]),
+    supabase.from("card_transactions").select("source_item_id,quantity")
+      .eq("owner_id",userId).in("status",["pending","active","return_pending"]),
   ])
 
   if (ownedResult.error) throw ownedResult.error
   if (outgoingResult.error) throw outgoingResult.error
   if (incomingResult.error) throw incomingResult.error
+  if (reservedResult.error) throw reservedResult.error
 
   const owned = (ownedResult.data ?? []).map(normalizeCardRelation)
+  for (const item of owned) item.reserved_quantity=(reservedResult.data??[])
+    .filter(row=>row.source_item_id===item.id).reduce((sum,row)=>sum+Number(row.quantity),0)
   const outgoing = outgoingResult.data ?? []
   const incoming = incomingResult.data ?? []
 
@@ -918,4 +923,5 @@ export async function respondMissingBorrowRequest(requestId: number, accept: boo
   })
   if (error) throw error
 }
+
 

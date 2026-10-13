@@ -10,7 +10,7 @@ export function applySavedDensity() {
   document.documentElement.dataset.density = density
 }
 
-export function SettingsModal({ onClose }: { onClose: () => void }) {
+export function SettingsModal({ onClose,desktopPanel=false,onDesktopPanelChange }: { onClose: () => void;desktopPanel?:boolean;onDesktopPanelChange?:(value:boolean)=>void }) {
   const qc = useQueryClient()
   const profile = useQuery({ queryKey: ["profile"], queryFn: fetchCurrentProfile })
   const [density, setDensity] = useState<Density>(
@@ -71,8 +71,11 @@ export function SettingsModal({ onClose }: { onClose: () => void }) {
             </select>
           </label>
           <p className="settingsHint">Grid density is saved only in this browser.</p>
+          <label className="checkRow"><input type="checkbox" checked={desktopPanel} onChange={e=>onDesktopPanelChange?.(e.target.checked)}/> Open card details in a desktop side panel</label>
+          <p className="settingsHint">Saved per account. Phones keep the bottom-sheet layout.</p>
         </div>
       </section>
     </div>
   )
 }
+

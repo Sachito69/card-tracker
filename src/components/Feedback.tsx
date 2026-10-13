@@ -7,6 +7,7 @@ import {
 } from "lucide-react"
 import {
   createContext,
+  useEffect,
   useCallback,
   useContext,
   useMemo,
@@ -21,6 +22,7 @@ type ToastItem = {
   id: number
   message: string
   tone: ToastTone
+  action?: { label: string; run: () => Promise<void> }
 }
 
 type ConfirmOptions = {
@@ -32,7 +34,7 @@ type ConfirmOptions = {
 }
 
 type FeedbackApi = {
-  toast: (message: string, tone?: ToastTone) => void
+  toast: (message: string, tone?: ToastTone, action?: { label: string; run: () => Promise<void> }) => void
   confirm: (options: ConfirmOptions) => Promise<boolean>
 }
 
@@ -49,14 +51,15 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   const [confirmState, setConfirmState] = useState<ConfirmOptions | null>(null)
   const confirmResolver = useRef<((value: boolean) => void) | null>(null)
   const nextToastId = useRef(1)
+  const confirmationRef=useRef<HTMLElement>(null)
 
-  const toast = useCallback((message: string, tone: ToastTone = "success") => {
+  const toast = useCallback((message: string, tone: ToastTone = "success", action?: { label: string; run: () => Promise<void> }) => {
     const id = nextToastId.current++
-    setToasts((current) => [...current, { id, message, tone }])
+    setToasts((current) => [...current, { id, message, tone, action }])
 
     window.setTimeout(() => {
       setToasts((current) => current.filter((item) => item.id !== id))
-    }, 3200)
+    }, action ? 12000 : 3200)
   }, [])
 
   const confirm = useCallback((options: ConfirmOptions) => {
@@ -72,6 +75,21 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     confirmResolver.current = null
     setConfirmState(null)
   }, [])
+  useEffect(()=>{
+    if(!confirmState)return
+    const previous=document.activeElement as HTMLElement|null
+    const node=confirmationRef.current
+    node?.querySelector<HTMLButtonElement>("button")?.focus()
+    const key=(event:KeyboardEvent)=>{
+      if(event.key==="Escape"){event.preventDefault();event.stopImmediatePropagation();finishConfirm(false);return}
+      if(event.key!=="Tab"||!node)return
+      const buttons=[...node.querySelectorAll<HTMLButtonElement>("button:not(:disabled)")]
+      if(event.shiftKey&&document.activeElement===buttons[0]){event.preventDefault();buttons.at(-1)?.focus()}
+      else if(!event.shiftKey&&document.activeElement===buttons.at(-1)){event.preventDefault();buttons[0]?.focus()}
+    }
+    document.addEventListener("keydown",key)
+    return()=>{document.removeEventListener("keydown",key);if(previous?.isConnected)previous.focus()}
+  },[confirmState,finishConfirm])
 
   const api = useMemo(() => ({ toast, confirm }), [toast, confirm])
 
@@ -90,6 +108,11 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
               <Info size={18} />
             )}
             <span>{item.message}</span>
+            {item.action && <button className="textButton toastUndo" onClick={async()=>{
+              setToasts(current=>current.map(t=>t.id===item.id?{...t,action:undefined}:t))
+              try { await item.action!.run(); setToasts(current=>current.filter(t=>t.id!==item.id)) }
+              catch(error) { setToasts(current=>current.map(t=>t.id===item.id?{...t,message:error instanceof Error?error.message:"Undo failed",tone:"error"}:t)) }
+            }}>{item.action.label}</button>}
             <button
               className="toastClose"
               aria-label="Dismiss"
@@ -112,6 +135,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
           <section
             className="confirmDialog"
             role="alertdialog"
+            ref={confirmationRef}
             aria-modal="true"
             aria-labelledby="confirm-title"
             onMouseDown={(event) => event.stopPropagation()}
@@ -140,3 +164,4 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     </FeedbackContext.Provider>
   )
 }
+

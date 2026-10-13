@@ -4,6 +4,7 @@ import { useMutation, useQueryClient } from "@tanstack/react-query"
 import { addCollectionItem } from "../lib/data"
 import { searchCards, cardImage, searchPrintings, type ScryfallCard } from "../lib/scryfall"
 import type { CollectionItem, Holder } from "../lib/types"
+import { useFeedback } from "./Feedback"
 
 type Props = {
   holders: Holder[]
@@ -41,12 +42,16 @@ function parseBulkLines(text: string): BulkRow[] {
 
 export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props) {
   const queryClient = useQueryClient()
+  const {toast}=useFeedback()
+  const inputRef=useRef<HTMLInputElement>(null)
+  const submitting=useRef(false)
   const [mode, setMode] = useState<"single" | "bulk">("single")
 
   const [query, setQuery] = useState("")
   const [suggestions, setSuggestions] = useState<ScryfallCard[]>([])
   const [printings, setPrintings] = useState<ScryfallCard[]>([])
   const [selectedId, setSelectedId] = useState("")
+  const [printingFilter,setPrintingFilter]=useState("")
   const [quantity, setQuantity] = useState(1)
   const [chosenName, setChosenName] = useState("")
   const [searching, setSearching] = useState(false)
@@ -96,12 +101,17 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
     setSelectedId("")
     setLoadingPrintings(false)
     setLookupError("")
+    setPrintingFilter("")
   }
 
   const selected = useMemo(
     () => printings.find((card) => card.id === selectedId) ?? null,
     [printings, selectedId],
   )
+  const filteredPrintings=useMemo(()=>{
+    const value=printingFilter.trim().toLowerCase()
+    return printings.filter(card=>!value||`${card.set_name} ${card.set} #${card.collector_number}`.toLowerCase().includes(value))
+  },[printings,printingFilter])
 
   async function chooseName(name: string) {
     const request = ++printingRequest.current
@@ -126,7 +136,7 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
   }
 
   const mutation = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (_keepOpen:boolean) => {
       if (!selected) throw new Error("Choose a printing first")
       await addCollectionItem({
         card: selected,
@@ -136,11 +146,18 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
         holder_id: holderId ? Number(holderId) : null,
       })
     },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["collection"] })
-      onClose()
+    onSuccess: async (_data,keepOpen) => {
+      await Promise.all(["collection","holders","decklist","lendable-inventory"].map(key=>queryClient.invalidateQueries({queryKey:[key]})))
+      toast("Card added")
+      if(keepOpen){changeQuery("");setQuantity(1);window.setTimeout(()=>inputRef.current?.focus(),0)}
+      else onClose()
     },
+    onSettled:()=>{submitting.current=false},
   })
+  function submit(keepOpen:boolean){
+    if(submitting.current||mutation.isPending||!selected||!Number.isInteger(quantity)||quantity<1)return
+    submitting.current=true;mutation.mutate(keepOpen)
+  }
 
   async function searchBulk() {
     const parsed = parseBulkLines(bulkText)
@@ -228,19 +245,19 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
   const foundCount = bulkRows.filter((row) => row.status === "found").length
 
   return (
-    <div className="modalBackdrop" onMouseDown={onClose}>
+    <div className="modalBackdrop" onMouseDown={()=>{if(!submitting.current)onClose()}}>
       <section className="modal addCardModal" onMouseDown={(event) => event.stopPropagation()}>
         <header className="modalHeader">
           <div>
             <h2>Add card</h2>
             <p>Add one card or search a whole list.</p>
           </div>
-          <button className="iconButton" onClick={onClose}><X size={18} /></button>
+          <button className="iconButton" disabled={mutation.isPending} aria-label="Close Add Card" onClick={()=>{if(!submitting.current)onClose()}}><X size={18} /></button>
         </header>
 
         <div className="modalTabs">
-          <button className={mode === "single" ? "active" : ""} onClick={() => setMode("single")}>Single</button>
-          <button className={mode === "bulk" ? "active" : ""} onClick={() => {
+          <button disabled={mutation.isPending} className={mode === "single" ? "active" : ""} onClick={() => setMode("single")}>Single</button>
+          <button disabled={mutation.isPending} className={mode === "bulk" ? "active" : ""} onClick={() => {
             if (loadingPrintings) changeQuery(query)
             printingRequest.current += 1
             setMode("bulk")
@@ -248,6 +265,7 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
         </div>
 
         <div className="modalBody">
+          <fieldset className="addCardFields" disabled={mutation.isPending}>
           {mode === "single" ? (
             <>
               <label>
@@ -255,6 +273,7 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
                 <div className="cardSearchInput">
                   <input
                     autoFocus
+                    ref={inputRef}
                     value={query}
                     onChange={(event) => changeQuery(event.target.value)}
                     onKeyDown={(event) => {
@@ -275,6 +294,7 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
                   <strong>{chosenName ? "Choose a printing" : "Search results"}</strong>
                   <span role="status">{loadingPrintings ? "Loading printings…" : searching ? "Searching…" : chosenName ? `${printings.length} printings` : `${suggestions.length} results`}</span>
                 </div>
+                <label className="printingFilter">Filter editions<input aria-label="Filter printings" disabled={!chosenName||loadingPrintings} value={printingFilter} onChange={e=>setPrintingFilter(e.target.value)} placeholder="Set name, set code, or collector number"/></label>
                 <div className="lookupScroll">
                   {lookupError ? (
                     <div className="lookupMessage" role="alert">
@@ -288,7 +308,7 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
                     <div className="lookupMessage"><LoaderCircle className="spin" size={24} /><p>{loadingPrintings ? "Finding available editions" : "Finding cards"}</p></div>
                   ) : chosenName ? (
                     <div className="printingGrid" role="group" aria-label="Available printings">
-                      {printings.map((card) => (
+                      {filteredPrintings.map((card) => (
                         <button
                           className={selectedId === card.id ? "printingOption selected" : "printingOption"}
                           key={card.id}
@@ -304,6 +324,7 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
                           <small>{card.set.toUpperCase()} · #{card.collector_number}</small>
                         </button>
                       ))}
+                      {!filteredPrintings.length&&<p className="settingsHint">No editions match this filter. Your selected printing is retained.</p>}
                     </div>
                   ) : suggestions.length ? (
                     <div className="cardSearchResults">
@@ -419,16 +440,18 @@ export function AddCardModal({ holders, defaultHolderId = null, onClose }: Props
           </label>
 
           {mode === "single" && mutation.error && <p className="errorText">{mutation.error.message}</p>}
+          </fieldset>
         </div>
         {mode === "single" && (
           <footer className="addCardFooter">
             <button
               className="primaryButton"
-              disabled={!selected || loadingPrintings || mutation.isPending}
-              onClick={() => mutation.mutate()}
+              disabled={!selected || loadingPrintings || mutation.isPending||!Number.isInteger(quantity)||quantity<1}
+              onClick={() => submit(false)}
             >
               {mutation.isPending ? "Adding..." : "Add card"}
             </button>
+            <button className="secondaryButton" disabled={!selected||loadingPrintings||mutation.isPending||!Number.isInteger(quantity)||quantity<1} onClick={()=>submit(true)}>Add another</button>
           </footer>
         )}
       </section>
@@ -456,4 +479,5 @@ function ConditionSelect({
     </label>
   )
 }
+
 

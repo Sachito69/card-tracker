@@ -38,5 +38,6 @@ export default function App() {
     )
   }
 
-  return session ? <Tracker userId={session.user.id} /> : <Auth />
+  return session ? <Tracker key={session.user.id} userId={session.user.id} /> : <Auth />
 }
+

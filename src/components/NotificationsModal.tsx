@@ -72,7 +72,7 @@ export function NotificationsModal({ onClose }: { onClose: () => void }) {
               </div>
               <div className="rowActions">
                 <button className="secondaryButton" disabled={act.isPending} onClick={() => act.mutate({ item, accept: false })}><XCircle size={14} /> Decline</button>
-                <button className="primaryButton" disabled={act.isPending} onClick={() => act.mutate({ item, accept: true })}><Check size={14} /> {item.kind === "return" ? "Confirm" : "Accept"}</button>
+                <button className="primaryButton" disabled={act.isPending} onClick={() => act.mutate({ item, accept: true })}><Check size={14} /> {item.kind === "return" ? "Confirm return" : "Accept"}</button>
               </div>
             </div>
           ))}
@@ -81,3 +81,4 @@ export function NotificationsModal({ onClose }: { onClose: () => void }) {
     </div>
   )
 }
+

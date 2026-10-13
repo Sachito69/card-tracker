@@ -75,6 +75,31 @@ export type CollectionItem = {
   loan_recipient_names?: string[]
   active_loans?: ActiveLoanDetail[]
   lent_quantity?: number
+  reserved_quantity?: number
+}
+
+export type DecklistEntry = {
+  id: number
+  holder_id: number
+  card_id: string
+  identity_key: string
+  desired_quantity: number
+  card: CardCatalog
+}
+export type TargetInput = { card_id: string; desired_quantity: number }
+export type FillAllocation = { kind: "owned" | "borrowed"; source_id: number; quantity: number }
+export type DeckProgressRow = { entry: DecklistEntry; placed: number; borrowed: number; missing: number; available: number }
+export type DeckProgress = { planned: number; placed: number; missing: number; borrowed: number; rows: DeckProgressRow[]; extras: Array<{ item: CollectionItem; quantity: number }> }
+export type UndoPlacement = {
+  user_id: string
+  kind: "owned" | "borrowed"
+  source_id: number
+  original_holder: number | null
+  expected_holder: number | null
+  quantity: number
+  condition: string
+  foil: boolean
+  card_id: string
 }
 
 export type FriendRequestNotification = {
@@ -159,4 +184,5 @@ export type PendingItem =
       detail: string
       created_at: string
     }
+
 
