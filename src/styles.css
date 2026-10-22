@@ -2167,3 +2167,11 @@ button:disabled{opacity:.55;cursor:not-allowed}
  .inventoryDeckProgress { padding:12px; }
  .tileAcquire { font-size:11px; }
 }
+
+/* Deck lending */
+.lendDeckAction{margin-left:auto;white-space:nowrap;min-height:42px}
+.deckLoanPreview{display:flex;flex-direction:column;gap:5px;max-height:260px;overflow:auto;border:1px solid var(--border);border-radius:12px;padding:8px}
+.deckLoanPreviewRow{display:flex;gap:10px;align-items:center;min-height:44px;padding:4px;border-radius:8px}
+.deckLoanPreviewRow img{width:31px;height:43px;object-fit:cover;border-radius:4px}
+.deckLoanPreviewRow span{flex:1;min-width:0;font-size:13px}
+@media(max-width:767px){.holderOpenHeading{flex-wrap:wrap}.lendDeckAction{width:100%;justify-content:center;margin:0}}
