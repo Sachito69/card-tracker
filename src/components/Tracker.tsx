@@ -17,6 +17,7 @@ import {
   Search,
   Settings,
   Trash2,
+  HandCoins,
   UserPlus,
   UsersRound,
 } from "lucide-react"
@@ -43,6 +44,7 @@ import { InventoryDeckProgress } from "./InventoryDeckProgress"
 import { collectionItemKey,isOwnedInventory } from "../lib/inventory"
 import { HolderCardGrid } from "./HolderCardGrid"
 import { FriendsListModal } from "./FriendsListModal"
+import { LendDeckModal } from "./LendDeckModal"
 import { HolderCreateModal } from "./HolderCreateModal"
 import { HistoryModal } from "./HistoryModal"
 import { NotificationsModal } from "./NotificationsModal"
@@ -128,6 +130,7 @@ export function Tracker({ userId }: { userId: string }) {
   const [showMainMenu, setShowMainMenu] = useState(false)
   const [editing, setEditing] = useState<CollectionItem | null>(null)
   const [selectedHolder, setSelectedHolder] = useState<Holder | null>(null)
+  const [lendingDeck, setLendingDeck] = useState<Holder | null>(null)
   const preferenceContext=selectedHolder?`${selectedHolder.type}:${selectedHolder.id}`:view
   const preferenceKey=`${userId}:${preferenceContext}`
   const [savedPreferences,setSavedPreferences]=useState({key:`${userId}:cards`,value:loadPreferences(userId,"cards")})
@@ -477,6 +480,11 @@ export function Tracker({ userId }: { userId: string }) {
               {selectedHolderItems.length.toLocaleString()} entries
             </p>
           </div>
+          {selectedHolder.type === "deck" && (
+            <button className="secondaryButton lendDeckAction" onClick={() => setLendingDeck(selectedHolder)}>
+              <HandCoins size={16} /> Lend Deck
+            </button>
+          )}
         </section>
       ) : (
         <section className="collectionHeading">
@@ -757,6 +765,7 @@ export function Tracker({ userId }: { userId: string }) {
         </button>
       </nav>
 
+      {lendingDeck && <LendDeckModal deck={lendingDeck} onClose={() => setLendingDeck(null)} />}
       {popup === "card" && <AddCardModal holders={holders} defaultHolderId={selectedHolder?.id ?? null} defaultMissing={selectedHolder?.type==="deck"||view==="wishlist"} onClose={() => setPopup(null)} />}
       {(popup === "deck" || popup === "container") && <HolderCreateModal type={popup} onClose={() => setPopup(null)} />}
       {popup === "settings" && <SettingsModal onClose={() => setPopup(null)} desktopPanel={desktopPanel} onDesktopPanelChange={value=>{setDesktopPanel(value);savePreferences(userId,"display",{...loadPreferences(userId,"display"),desktopPanel:value})}} />}

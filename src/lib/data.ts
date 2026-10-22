@@ -904,3 +904,13 @@ export async function respondMissingBorrowRequest(requestId: number, accept: boo
 }
 
 
+
+export async function lendDeck(deckId: number, recipientUserId: string | null, contactId: number | null): Promise<number> {
+  const { data, error } = await supabase.rpc("lend_deck", {
+    p_deck_id: deckId,
+    p_recipient_user_id: recipientUserId,
+    p_contact_id: contactId,
+  })
+  if (error) throw error
+  return Number(data)
+}
